@@ -18,7 +18,20 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    const brokerUrl = this.configService.get<string>('MQTT_BROKER_URL') ?? 'mqtt://localhost:1883';
+    const configuredBrokerUrl = this.configService.get<string>('MQTT_BROKER_URL');
+    const deviceControlMode = this.configService.get<string>('DEVICE_CONTROL_MODE') ?? 'MOCK';
+
+    const shouldConnect =
+      Boolean(configuredBrokerUrl) ||
+      deviceControlMode === 'MQTT_DIRECT' ||
+      deviceControlMode === 'MQTT';
+
+    if (!shouldConnect) {
+      this.logger.log(`MQTT connection disabled for DEVICE_CONTROL_MODE=${deviceControlMode}`);
+      return;
+    }
+
+    const brokerUrl = configuredBrokerUrl ?? 'mqtt://localhost:1883';
     const clientId = this.configService.get<string>('MQTT_CLIENT_ID') ?? 'agrios-backend';
 
     this.client = mqtt.connect(brokerUrl, { clientId });
