@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -29,6 +29,29 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const publicRegistrationEnabled = process.env.ENABLE_PUBLIC_REGISTRATION === 'true';
+
+    if (isProduction && !publicRegistrationEnabled) {
+      throw new ForbiddenException('生产环境已关闭公开注册');
+    }
+
+    const allowedSelfServiceRoles = new Set<string>([
+      'FARMER',
+      'LARGE_GROWER',
+      'DRONE_PILOT',
+      'MACHINERY_PROVIDER',
+      'INPUT_STORE'
+    ]);
+
+    if (!allowedSelfServiceRoles.has(dto.role)) {
+      throw new ForbiddenException('公开注册不允许创建管理角色');
+    }
+
+    if (dto.tenantId || dto.farmId) {
+      throw new ForbiddenException('公开注册不允许指定租户或农场');
+    }
+
     const identity = this.normalizeIdentity(dto.phone, dto.email);
     const exists = await this.findByIdentity(identity);
     if (exists) {
