@@ -1,0 +1,48 @@
+{
+  "name": "AgriOS Valve Command Feedback Forwarding",
+  "description": "Skeleton rule chain for forwarding electric-valve telemetry and command ACK messages to AgriOS /api/v1/device-control/valves/feedback.",
+  "nodes": [
+    {
+      "name": "Valve telemetry or ACK",
+      "type": "org.thingsboard.rule.engine.filter.TbMsgTypeSwitchNode",
+      "configuration": {
+        "version": 0
+      }
+    },
+    {
+      "name": "Normalize valve feedback",
+      "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+      "configuration": {
+        "scriptLang": "JS",
+        "jsScript": "var body = JSON.parse(msg); return {msg: {commandId: body.lastCommandId || body.commandId, deviceId: metadata.agriosDeviceId, deviceCode: metadata.deviceName, valveStatus: body.valveStatus || 'UNKNOWN', valveOpeningPercent: body.valveOpeningPercent, success: body.lastCommandStatus !== 'FAILED', errorCode: body.valveErrorCode || null, errorMessage: body.errorMessage || null, timestamp: metadata.ts || new Date().toISOString()}, metadata: metadata, msgType: msgType};"
+      }
+    },
+    {
+      "name": "POST AgriOS valve feedback",
+      "type": "org.thingsboard.rule.engine.rest.TbRestApiCallNode",
+      "configuration": {
+        "restEndpointUrlPattern": "http://agrios-backend:3000/api/v1/device-control/valves/feedback",
+        "requestMethod": "POST",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "useSimpleClientHttpFactory": true
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": "Valve telemetry or ACK",
+      "to": "Normalize valve feedback",
+      "type": "Post telemetry"
+    },
+    {
+      "from": "Normalize valve feedback",
+      "to": "POST AgriOS valve feedback",
+      "type": "Success"
+    }
+  ],
+  "safety": {
+    "note": "This skeleton forwards ACK/telemetry only. It does not authorize valve opening and does not bypass AgriOS Safety / Approval / ActionQueue / DeviceControl."
+  }
+}

@@ -1,0 +1,24 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: agrios-mysql
+    environment:
+      MYSQL_DATABASE: agrios
+      MYSQL_USER: agrios
+      MYSQL_PASSWORD: REPLACE_WITH_STRONG_DB_PASSWORD
+      MYSQL_ROOT_PASSWORD: REPLACE_WITH_STRONG_ROOT_PASSWORD
+    ports:
+      - "3306:3306"
+    volumes:
+      - agrios_mysql_data:/var/lib/mysql
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: agrios-mqtt
+    ports:
+      - "1883:1883"
+    volumes:
+      - ../mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+volumes:
+  agrios_mysql_data:

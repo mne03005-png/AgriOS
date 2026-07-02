@@ -1,0 +1,7 @@
+{
+  "name": "AgriOS Fertigation Machine Profile",
+  "type": "FERTIGATION_MACHINE",
+  "telemetryKeys": ["fertilizerTankLevelL", "pumpStatus", "flowRateM3h", "signalStrength"],
+  "rpcMethods": ["startFertigation", "stopFertigation", "emergencyStop"],
+  "attributes": ["farmId", "fieldId", "zoneId", "deviceCode", "installerName"]
+}

@@ -1,0 +1,20 @@
+$BaseUrl = $env:AGRIOS_API_URL
+if (-not $BaseUrl) { $BaseUrl = "http://localhost:3000/api/v1" }
+
+Write-Host "AgriOS P12.6 Permission Matrix Check"
+Write-Host "BaseUrl: $BaseUrl"
+Write-Host ""
+Write-Host "VIEWER cannot execute:"
+Write-Host "curl -X POST `"$BaseUrl/action-queue/enqueue`" -H `"Authorization: Bearer <viewer_token>`" -H `"Content-Type: application/json`" -d '{`"farmId`":`"demo`",`"actionPlanId`":`"replace_me`"}'"
+Write-Host ""
+Write-Host "OPERATOR cannot approve high-risk approval:"
+Write-Host "curl -X POST `"$BaseUrl/approval/<approvalId>/approve`" -H `"Authorization: Bearer <operator_token>`""
+Write-Host ""
+Write-Host "INSTALLER cannot view billing:"
+Write-Host "curl `"$BaseUrl/billing/usage?tenantId=demo-tenant`" -H `"Authorization: Bearer <installer_token>`""
+Write-Host ""
+Write-Host "PLATFORM_ADMIN cross tenant should write audit:"
+Write-Host "curl `"$BaseUrl/audit/events?tenantId=another_tenant`" -H `"Authorization: Bearer <platform_admin_token>`""
+Write-Host ""
+Write-Host "Emergency stop requires emergency.stop permission:"
+Write-Host "curl -X POST `"$BaseUrl/safety/emergency-stop`" -H `"Authorization: Bearer <maintainer_or_admin_token>`" -H `"Content-Type: application/json`" -d '{`"farmId`":`"demo`",`"enabled`":true}'"

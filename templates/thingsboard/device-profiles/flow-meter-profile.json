@@ -1,0 +1,7 @@
+{
+  "name": "AgriOS Flow Meter Profile",
+  "type": "FLOW_METER",
+  "telemetryKeys": ["flowRateM3h", "batteryPercent", "signalStrength"],
+  "attributes": ["farmId", "fieldId", "zoneId", "deviceCode", "installerName", "calibrationStatus"],
+  "alarms": ["flowTooLow", "flowTooHigh", "offline"]
+}

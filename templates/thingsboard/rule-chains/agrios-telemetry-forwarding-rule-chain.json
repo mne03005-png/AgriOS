@@ -1,0 +1,55 @@
+{
+  "name": "AgriOS Telemetry Forwarding Rule Chain",
+  "version": "P13.0",
+  "description": "Forward ThingsBoard device telemetry to AgriOS without exposing real secrets in source control.",
+  "nodes": [
+    {
+      "name": "input",
+      "type": "org.thingsboard.rule.engine.filter.TbMsgTypeSwitchNode",
+      "note": "Accept POST_TELEMETRY_REQUEST messages."
+    },
+    {
+      "name": "validate telemetry keys",
+      "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
+      "requiredKeys": [
+        "soilMoisture",
+        "temperature",
+        "humidity",
+        "pressureKpa",
+        "flowRateM3h"
+      ]
+    },
+    {
+      "name": "build AgriOS payload",
+      "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+      "payloadShape": {
+        "deviceName": "${metadata.deviceName}",
+        "thingsboardDeviceId": "${metadata.deviceId}",
+        "ts": "${msg.ts}",
+        "values": "${msg}",
+        "metadata": "${metadata}"
+      }
+    },
+    {
+      "name": "forward webhook to AgriOS",
+      "type": "org.thingsboard.rule.engine.rest.TbRestApiCallNode",
+      "method": "POST",
+      "webhookTarget": "${PUBLIC_API_URL}/api/v1/iot/thingsboard/telemetry",
+      "headers": {
+        "Content-Type": "application/json",
+        "x-thingsboard-secret": "${THINGSBOARD_WEBHOOK_SECRET}"
+      },
+      "note": "Use ThingsBoard tenant/server attributes or environment-managed variables for the real secret."
+    },
+    {
+      "name": "save timeseries",
+      "type": "org.thingsboard.rule.engine.telemetry.TbMsgTimeseriesNode"
+    }
+  ],
+  "safety": {
+    "autoOpenPump": false,
+    "autoOpenValve": false,
+    "message": "Telemetry may create recommendations; physical execution still requires AgriOS Safety / Approval / ActionQueue / DeviceControl."
+  },
+  "note": "Skeleton template only. Do not store real webhook secrets, tokens, or passwords in this file."
+}

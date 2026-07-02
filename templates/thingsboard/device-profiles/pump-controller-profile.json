@@ -1,0 +1,7 @@
+{
+  "name": "AgriOS Pump Controller Profile",
+  "type": "PUMP_CONTROLLER",
+  "telemetryKeys": ["pumpStatus", "pumpFrequencyHz", "pressureKpa", "flowRateM3h", "signalStrength"],
+  "rpcMethods": ["startPump", "stopPump", "setPumpFrequency", "emergencyStop"],
+  "attributes": ["farmId", "deviceCode", "installerName", "firmwareVersion"]
+}

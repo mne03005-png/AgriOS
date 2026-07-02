@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Onion Field A Drone Spray</name>
+    <Placemark>
+      <name>Onion Field A Coverage</name>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              118.0950,36.7000,0
+              118.1300,36.7020,0
+              118.1260,36.7360,0
+              118.0940,36.7340,0
+              118.0950,36.7000,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+    <Placemark>
+      <name>Onion Field A Spray Route</name>
+      <LineString>
+        <coordinates>
+          118.0960,36.7040,10
+          118.1220,36.7070,10
+          118.0980,36.7160,10
+          118.1240,36.7240,10
+          118.1000,36.7320,10
+        </coordinates>
+      </LineString>
+    </Placemark>
+  </Document>
+</kml>

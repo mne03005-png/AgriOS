@@ -1,0 +1,19 @@
+{
+  "name": "agrios",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AgriOS county-level agricultural digitization platform monorepo.",
+  "scripts": {
+    "dev:backend": "npm.cmd --prefix apps/backend run start:dev",
+    "build:backend": "npm.cmd --prefix apps/backend run build",
+    "prisma:generate": "npm.cmd --prefix apps/backend run prisma:generate",
+    "prisma:migrate": "npm.cmd --prefix apps/backend run prisma:migrate"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

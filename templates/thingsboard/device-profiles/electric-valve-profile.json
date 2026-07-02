@@ -1,0 +1,39 @@
+{
+  "name": "AgriOS Electric Valve Profile",
+  "type": "ELECTRIC_VALVE",
+  "telemetryKeys": [
+    "valveStatus",
+    "valveOpeningPercent",
+    "valveErrorCode",
+    "batteryPercent",
+    "signalStrength",
+    "lastCommandId",
+    "lastCommandStatus"
+  ],
+  "attributes": [
+    "agriosDeviceId",
+    "farmId",
+    "fieldId",
+    "zoneId",
+    "valveType",
+    "normallyOpen",
+    "firmwareVersion",
+    "deviceCode",
+    "installerName"
+  ],
+  "rpcMethods": [
+    "openValve",
+    "closeValve",
+    "setValveOpening",
+    "getValveStatus",
+    "testOpenValve"
+  ],
+  "rpcPayloadExample": {
+    "commandId": "valve-command-id",
+    "deviceCode": "demo-valve-001",
+    "openingPercent": 5,
+    "dryRun": true,
+    "timeoutMs": 10000
+  },
+  "note": "RPC is only a compatible control path. Real production execution must still be triggered by AgriOS Safety, Approval, ActionQueue, and DeviceControl. Default commissioning mode is dry-run."
+}

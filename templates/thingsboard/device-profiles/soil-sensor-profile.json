@@ -1,0 +1,8 @@
+{
+  "name": "AgriOS Soil Sensor Profile",
+  "type": "SOIL_SENSOR",
+  "telemetryKeys": ["soilMoisture", "soilTemperature", "batteryPercent", "signalStrength", "latitude", "longitude"],
+  "attributes": ["farmId", "fieldId", "zoneId", "deviceCode", "installerName", "installDate", "firmwareVersion", "hardwareVersion", "calibrationStatus"],
+  "alarms": ["lowBattery", "lowSignal", "offline"],
+  "note": "Skeleton template for ThingsBoard CE. Aligns with AgriOS telemetry normalizer."
+}

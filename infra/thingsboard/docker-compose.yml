@@ -1,0 +1,41 @@
+services:
+  tb-postgres:
+    image: postgres:18
+    container_name: agrios-tb-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: thingsboard
+      POSTGRES_USER: thingsboard
+      POSTGRES_PASSWORD: REPLACE_WITH_STRONG_POSTGRES_PASSWORD
+    volumes:
+      - tb-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thingsboard -d thingsboard"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  thingsboard:
+    image: thingsboard/tb-node:4.3.1.2
+    container_name: agrios-thingsboard
+    restart: unless-stopped
+    depends_on:
+      tb-postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+      - "18830:1883"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://tb-postgres:5432/thingsboard
+      SPRING_DATASOURCE_USERNAME: thingsboard
+      SPRING_DATASOURCE_PASSWORD: REPLACE_WITH_STRONG_POSTGRES_PASSWORD
+      TB_QUEUE_TYPE: in-memory
+      MQTT_BIND_PORT: 1883
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/login >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+
+volumes:
+  tb-postgres-data:

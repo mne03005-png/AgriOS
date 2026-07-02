@@ -1,0 +1,43 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Onion Field A Coverage",
+        "operationType": "SPRAYING",
+        "chemicalName": "onion foliar fertilizer"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [118.095, 36.700],
+            [118.130, 36.702],
+            [118.126, 36.736],
+            [118.094, 36.734],
+            [118.095, 36.700]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Onion Field A Spray Route",
+        "speed": "5m/s",
+        "height": "10m"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [118.096, 36.704],
+          [118.122, 36.707],
+          [118.098, 36.716],
+          [118.124, 36.724],
+          [118.100, 36.732]
+        ]
+      }
+    }
+  ]
+}

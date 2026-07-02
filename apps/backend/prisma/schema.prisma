@@ -1,0 +1,2252 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  tenantId  String?
+  phone     String   @unique
+  email     String?  @unique
+  name      String
+  passwordHash String?
+  role      UserRole @default(FARMER)
+  status    UserStatus @default(ACTIVE)
+  farmId    String?
+  farm      Farm?    @relation(fields: [farmId], references: [id])
+  remark    String?  @db.Text
+  lastLoginAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([farmId])
+  @@index([tenantId])
+  @@index([status])
+}
+
+model Farm {
+  id           String     @id @default(cuid())
+  tenantId     String?
+  name         String
+  type         FarmType
+  address      String?
+  contactName  String?
+  contactPhone String?
+  remark       String?    @db.Text
+  users        User[]
+  fields       Field[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([tenantId])
+}
+
+model Field {
+  id                String             @id @default(cuid())
+  tenantId          String?
+  farmId            String
+  farm              Farm               @relation(fields: [farmId], references: [id])
+  name              String
+  areaMu            Decimal            @db.Decimal(10, 2)
+  location          String?
+  latitude          Decimal?           @db.Decimal(10, 7)
+  longitude         Decimal?           @db.Decimal(10, 7)
+  soilType          String?
+  waterSource       String?
+  irrigationMethod  String?
+  landSource        LandSource?
+  lastYearCrop      String?
+  currentSuggestion String?            @db.Text
+  remark            String?            @db.Text
+  cropSeasons       CropSeason[]
+  devices           Device[]
+  sensorRecords     SensorRecord[]
+  irrigationRecords IrrigationRecord[]
+  irrigationAdvices IrrigationAdvice[]
+  workLogs          WorkLog[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([farmId])
+  @@index([tenantId])
+}
+
+model CropSeason {
+  id                String             @id @default(cuid())
+  tenantId          String?
+  fieldId           String
+  field             Field              @relation(fields: [fieldId], references: [id])
+  cropName          String
+  variety           String?
+  year              Int
+  season            String?
+  sowingDate        DateTime?
+  expectedHarvestAt DateTime?
+  actualHarvestAt   DateTime?
+  managerName       String?
+  status            CropSeasonStatus   @default(PLANNED)
+  remark            String?            @db.Text
+  farmInputs        FarmInput[]
+  workLogs          WorkLog[]
+  irrigationRecords IrrigationRecord[]
+  irrigationAdvices IrrigationAdvice[]
+  costRecords       CostRecord[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([fieldId])
+  @@index([tenantId])
+  @@unique([fieldId, cropName, year, season])
+}
+
+model FarmInput {
+  id              String        @id @default(cuid())
+  tenantId        String?
+  cropSeasonId    String
+  cropSeason      CropSeason    @relation(fields: [cropSeasonId], references: [id])
+  type            FarmInputType
+  name            String
+  brand           String?
+  specification   String?
+  purchaseChannel String?
+  supplierName    String?
+  quantity        Decimal       @db.Decimal(12, 2)
+  unitPrice       Decimal?      @db.Decimal(12, 2)
+  totalPrice      Decimal?      @db.Decimal(12, 2)
+  purchaseDate    DateTime?
+  usedDate        DateTime?
+  remark          String?       @db.Text
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([cropSeasonId])
+  @@index([tenantId])
+}
+
+model WorkLog {
+  id            String      @id @default(cuid())
+  tenantId      String?
+  fieldId       String
+  field         Field       @relation(fields: [fieldId], references: [id])
+  cropSeasonId  String
+  cropSeason    CropSeason  @relation(fields: [cropSeasonId], references: [id])
+  type          WorkLogType
+  workDate      DateTime
+  workerName    String?
+  farmInputRefs Json?
+  areaMu        Decimal?    @db.Decimal(10, 2)
+  laborHours    Decimal?    @db.Decimal(10, 2)
+  cost          Decimal?    @db.Decimal(12, 2)
+  imageUrls     Json?
+  remark        String?     @db.Text
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([fieldId])
+  @@index([cropSeasonId])
+  @@index([tenantId])
+}
+
+model Device {
+  id             String             @id @default(cuid())
+  tenantId       String?
+  fieldId        String?
+  field          Field?             @relation(fields: [fieldId], references: [id])
+  code           String             @unique
+  name           String
+  type           DeviceType
+  thingsboardDeviceId String?       @unique
+  thingsboardAccessToken String?
+  iotStatus      IoTDeviceStatus    @default(ACTIVE)
+  bindingSource  DeviceBindingSource @default(UNKNOWN)
+  mqttTopic      String?
+  online         Boolean            @default(false)
+  currentStatus  Json?
+  lastReportedAt DateTime?
+  lastTelemetryAt DateTime?
+  remark         String?            @db.Text
+  sensorRecords  SensorRecord[]
+  irrigationAdvices IrrigationAdvice[]
+  commands       DeviceCommand[]
+  pumpRecords    IrrigationRecord[] @relation("PumpDevice")
+  valveRecords   IrrigationRecord[] @relation("ValveDevice")
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([fieldId])
+  @@index([thingsboardDeviceId])
+  @@index([tenantId])
+}
+
+model SensorRecord {
+  id         String           @id @default(cuid())
+  tenantId   String?
+  deviceId   String?
+  device     Device?          @relation(fields: [deviceId], references: [id])
+  fieldId    String?
+  field      Field?           @relation(fields: [fieldId], references: [id])
+  deviceName String?
+  thingsboardDeviceId String?
+  type       SensorRecordType
+  value      Decimal          @db.Decimal(12, 3)
+  unit       String?
+  soilMoisture Decimal?       @db.Decimal(12, 3)
+  temperature  Decimal?       @db.Decimal(12, 3)
+  humidity     Decimal?       @db.Decimal(12, 3)
+  battery      Decimal?       @db.Decimal(12, 3)
+  rawPayload   Json?
+  normalizedJson Json?
+  source       String         @default("thingsboard")
+  reportedAt DateTime
+  createdAt  DateTime         @default(now())
+
+  @@index([deviceId, reportedAt])
+  @@index([fieldId, reportedAt])
+  @@index([tenantId])
+}
+
+model IrrigationRecord {
+  id             String         @id @default(cuid())
+  tenantId       String?
+  fieldId        String
+  field          Field          @relation(fields: [fieldId], references: [id])
+  cropSeasonId   String?
+  cropSeason     CropSeason?    @relation(fields: [cropSeasonId], references: [id])
+  startTime      DateTime
+  endTime        DateTime?
+  mode           IrrigationMode
+  status         IrrigationRecordStatus @default(RUNNING)
+  waterAmount    Decimal?       @db.Decimal(12, 2)
+  pumpDeviceId   String?
+  pumpDevice     Device?        @relation("PumpDevice", fields: [pumpDeviceId], references: [id])
+  valveDeviceId  String?
+  valveDevice    Device?        @relation("ValveDevice", fields: [valveDeviceId], references: [id])
+  triggerReason  String?
+  remark         String?        @db.Text
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([fieldId])
+  @@index([cropSeasonId])
+  @@index([tenantId])
+}
+
+model DeviceCommand {
+  id           String              @id @default(cuid())
+  tenantId     String?
+  deviceId     String
+  device       Device              @relation(fields: [deviceId], references: [id])
+  command      String
+  payload      Json?
+  status       DeviceCommandStatus @default(PENDING)
+  mqttTopic    String
+  requestId    String              @unique
+  sentAt       DateTime?
+  ackAt        DateTime?
+  errorMessage String?             @db.Text
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([deviceId, createdAt])
+  @@index([status])
+  @@index([tenantId])
+}
+
+model ServiceProvider {
+  id               String              @id @default(cuid())
+  tenantId         String?
+  name             String
+  type             ServiceProviderType
+  contact          String?
+  serviceArea      String?
+  serviceContent   String?             @db.Text
+  priceDescription String?             @db.Text
+  recommended      Boolean             @default(false)
+  remark           String?             @db.Text
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([tenantId])
+}
+
+model CostRecord {
+  id             String       @id @default(cuid())
+  tenantId       String?
+  cropSeasonId   String
+  cropSeason     CropSeason   @relation(fields: [cropSeasonId], references: [id])
+  type           CostType
+  amount         Decimal      @db.Decimal(12, 2)
+  occurredDate   DateTime
+  sourceType     String?
+  sourceId       String?
+  sourceRecordId String?
+  isReversed     Boolean      @default(false)
+  reversedAt     DateTime?
+  reverseReason  String?      @db.Text
+  remark         String?      @db.Text
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([cropSeasonId])
+  @@index([tenantId])
+}
+
+model IrrigationAdvice {
+  id             String                 @id @default(cuid())
+  tenantId       String?
+  fieldId        String
+  field          Field                  @relation(fields: [fieldId], references: [id])
+  deviceId       String?
+  device         Device?                @relation(fields: [deviceId], references: [id])
+  cropSeasonId   String?
+  cropSeason     CropSeason?            @relation(fields: [cropSeasonId], references: [id])
+  soilMoisture   Decimal                @db.Decimal(12, 3)
+  action         IrrigationAdviceAction
+  message        String
+  source         IrrigationAdviceSource @default(SYSTEM)
+  status         IrrigationAdviceStatus @default(PENDING)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@index([fieldId, createdAt])
+  @@index([deviceId])
+  @@index([cropSeasonId])
+  @@index([tenantId])
+}
+
+model OperationLog {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  userId      String?
+  action      String
+  targetType  String
+  targetId    String
+  description String   @db.Text
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([targetType, targetId])
+  @@index([createdAt])
+  @@index([tenantId])
+}
+
+model IoTWebhookDeadLetter {
+  id                  String                  @id @default(cuid())
+  tenantId            String?
+  source              String                  @default("thingsboard")
+  eventType           String
+  deviceName          String?
+  thingsboardDeviceId String?
+  rawPayload          Json?
+  errorMessage        String                  @db.Text
+  errorStack          String?                 @db.Text
+  retryCount          Int                     @default(0)
+  status              WebhookDeadLetterStatus @default(PENDING)
+  retriedAt           DateTime?
+  resolvedAt          DateTime?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  @@index([source, eventType])
+  @@index([status, createdAt])
+  @@index([thingsboardDeviceId])
+  @@index([tenantId])
+}
+
+model IoTSyncAudit {
+  id         String   @id @default(cuid())
+  tenantId   String?
+  source     String   @default("thingsboard")
+  syncType   String
+  total      Int      @default(0)
+  created    Int      @default(0)
+  updated    Int      @default(0)
+  bound      Int      @default(0)
+  unbound    Int      @default(0)
+  warnings   Json?
+  rawResult  Json?
+  startedAt  DateTime
+  finishedAt DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([source, syncType])
+  @@index([createdAt])
+  @@index([tenantId])
+}
+
+model FieldStateSnapshot {
+  id                   String        @id @default(cuid())
+  tenantId             String?
+  fieldId              String
+  cropSeasonId         String?
+  latestSensorRecordId String?
+  soilMoisture         Decimal?      @db.Decimal(12, 3)
+  temperature          Decimal?      @db.Decimal(12, 3)
+  humidity             Decimal?      @db.Decimal(12, 3)
+  deviceOnlineCount    Int           @default(0)
+  deviceOfflineCount   Int           @default(0)
+  riskLevel            FieldRiskLevel @default(NORMAL)
+  summary              Json?
+  createdAt            DateTime      @default(now())
+
+  @@index([fieldId, createdAt])
+  @@index([cropSeasonId])
+  @@index([tenantId])
+}
+
+model DecisionRecord {
+  id               String         @id @default(cuid())
+  tenantId         String?
+  fieldId          String
+  cropSeasonId     String?
+  stateSnapshotId  String?
+  decisionType     DecisionType
+  recommendation   DecisionRecommendation
+  confidence       Decimal?       @db.Decimal(5, 2)
+  reason           String         @db.Text
+  status           DecisionStatus @default(PROPOSED)
+  metadata         Json?
+  actionPlans      ActionPlan[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([fieldId, createdAt])
+  @@index([cropSeasonId])
+  @@index([stateSnapshotId])
+  @@index([tenantId])
+}
+
+model ActionPlan {
+  id          String           @id @default(cuid())
+  tenantId    String?
+  decisionId  String
+  decision    DecisionRecord   @relation(fields: [decisionId], references: [id])
+  fieldId     String
+  status      ActionPlanStatus @default(PLANNED)
+  actions     Json
+  safety      Json?
+  executions  ActionExecution[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([decisionId])
+  @@index([fieldId, createdAt])
+  @@index([status])
+  @@index([tenantId])
+}
+
+model ActionExecution {
+  id           String                @id @default(cuid())
+  tenantId     String?
+  actionPlanId String
+  actionPlan   ActionPlan            @relation(fields: [actionPlanId], references: [id])
+  deviceId     String?
+  command      String
+  status       ActionExecutionStatus @default(PENDING)
+  requestId    String?
+  result       Json?
+  executedAt   DateTime?
+  feedbackAt   DateTime?
+  feedback     Json?
+  errorMessage String?               @db.Text
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@index([actionPlanId])
+  @@index([deviceId])
+  @@index([status])
+  @@index([tenantId])
+}
+
+model Tenant {
+  id        String       @id @default(cuid())
+  name      String
+  type      TenantType   @default(FARM_GROUP)
+  status    TenantStatus @default(ACTIVE)
+  metadata  Json?
+  remark    String?      @db.Text
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model TenantFarm {
+  id        String   @id @default(cuid())
+  tenantId  String
+  farmId    String
+  role      String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@unique([tenantId, farmId])
+}
+
+model SubscriptionPlan {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  name            String
+  monthlyPrice    Decimal  @default(0) @db.Decimal(12, 2)
+  pricePerHectare Decimal  @default(0) @db.Decimal(12, 4)
+  pricePerDevice  Decimal  @default(0) @db.Decimal(12, 4)
+  pricePerAiDecision Decimal @default(0) @db.Decimal(12, 4)
+  features        Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model BillingAccount {
+  id        String   @id @default(cuid())
+  tenantId  String
+  farmId    String?
+  planId    String?
+  status    BillingStatus @default(ACTIVE)
+  balance   Decimal  @default(0) @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+}
+
+model UsageRecord {
+  id          String    @id @default(cuid())
+  tenantId    String
+  farmId      String?
+  fieldId     String?
+  deviceId    String?
+  usageType   UsageType
+  quantity    Decimal   @default(1) @db.Decimal(12, 3)
+  unit        String?
+  costAmount  Decimal   @default(0) @db.Decimal(12, 2)
+  metadata    Json?
+  occurredAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId, occurredAt])
+  @@index([farmId])
+  @@index([usageType])
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  tenantId    String
+  accountId   String?
+  amount      Decimal       @db.Decimal(12, 2)
+  status      InvoiceStatus @default(DRAFT)
+  periodStart DateTime?
+  periodEnd   DateTime?
+  lineItems   Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([tenantId])
+  @@index([accountId])
+}
+
+model CostCenter {
+  id        String   @id @default(cuid())
+  tenantId  String
+  farmId    String?
+  name      String
+  code      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+}
+
+model OperationCost {
+  id        String                @id @default(cuid())
+  tenantId  String?
+  farmId    String
+  fieldId   String?
+  refType   String
+  refId     String
+  category  OperationCostCategory
+  amount    Float                 @default(0)
+  currency  String                @default("CNY")
+  quantity  Float?
+  unit      String?
+  unitPrice Float?
+  note      String?               @db.Text
+  createdAt DateTime              @default(now())
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([refType, refId])
+  @@index([category])
+}
+
+model ApprovalRequest {
+  id          String         @id @default(cuid())
+  tenantId    String?
+  farmId      String?
+  fieldId     String?
+  actionPlanId String?
+  decisionRecordId String?
+  type        ApprovalType   @default(ACTION_PLAN)
+  targetType  String
+  targetId    String
+  riskLevel   String?
+  status      ApprovalStatus @default(PENDING)
+  requestedBy String?
+  approvedBy  String?
+  reason      String?        @db.Text
+  payload     Json?
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  decidedAt   DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([actionPlanId])
+  @@index([decisionRecordId])
+  @@index([targetType, targetId])
+  @@index([status])
+}
+
+model SafetyAlert {
+  id          String      @id @default(cuid())
+  tenantId    String?
+  farmId      String?
+  fieldId     String?
+  severity    AlertSeverity
+  alertType   String
+  message     String      @db.Text
+  status      AlertStatus @default(OPEN)
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+  resolvedAt  DateTime?
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([status])
+}
+
+model DigitalTwinSnapshot {
+  id                 String   @id @default(cuid())
+  tenantId           String?
+  fieldId            String
+  simulatedSoilState Json?
+  predictedWaterUse  Decimal? @db.Decimal(12, 3)
+  yieldEstimate      Decimal? @db.Decimal(12, 3)
+  createdAt          DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([fieldId, createdAt])
+}
+
+model FieldBoundary {
+  id               String           @id @default(cuid())
+  tenantId         String?
+  farmId           String
+  fieldId          String?
+  name             String
+  source           BoundarySource
+  coordinateSystem CoordinateSystem @default(WGS84)
+  polygon          Json
+  area             Float?
+  areaSquareMeters Float?
+  areaMu           Float?
+  confidence       Float?
+  status           BoundaryStatus   @default(CANDIDATE)
+  rawInput         Json?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([status])
+}
+
+model GpsTrack {
+  id               String           @id @default(cuid())
+  tenantId         String?
+  farmId           String
+  name             String
+  source           String
+  coordinateSystem CoordinateSystem @default(WGS84)
+  trackJson        Json
+  rawFileName      String?
+  metadata         Json?
+  createdAt        DateTime         @default(now())
+
+  @@index([tenantId])
+  @@index([farmId])
+}
+
+model DroneMapJob {
+  id             String            @id @default(cuid())
+  tenantId       String?
+  farmId         String
+  name           String
+  status         DroneMapJobStatus @default(UPLOADED)
+  imageCount     Int?
+  flightTrack    Json?
+  orthomosaicUrl String?
+  resultJson     Json?
+  errorMessage   String?           @db.Text
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([status])
+}
+
+model MapLayer {
+  id               String           @id @default(cuid())
+  tenantId         String?
+  farmId           String
+  name             String
+  type             MapLayerType
+  source           String
+  coordinateSystem CoordinateSystem @default(WGS84)
+  geoJson          Json
+  styleJson        Json?
+  isVisible        Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([type])
+}
+
+model DroneOperation {
+  id                 String               @id @default(cuid())
+  tenantId           String?
+  farmId             String
+  fieldId            String?
+  fieldBoundaryId    String?
+  droneBrand         String               @default("DJI")
+  droneModel         String?
+  operationType      DroneOperationType
+  source             DroneOperationSource
+  sourceFileName     String?
+  coordinateSystem   CoordinateSystem?
+  plannedAreaMu      Float?
+  actualAreaMu       Float?
+  coverageRate       Float?
+  overlapRate        Float?
+  missedAreaMu       Float?
+  repeatedAreaMu     Float?
+  flightDistanceM    Float?
+  flightDurationS    Int?
+  sprayVolumeL       Float?
+  chemicalName       String?
+  dosagePerMu        Float?
+  routeGeoJson       Json?
+  coverageGeoJson    Json?
+  prescriptionJson   Json?
+  rawJson            Json?
+  status             DroneOperationStatus @default(IMPORTED)
+  startedAt          DateTime?
+  finishedAt         DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([fieldBoundaryId])
+  @@index([operationType])
+  @@index([source])
+  @@index([status])
+}
+
+model DroneImportJob {
+  id           String               @id @default(cuid())
+  tenantId     String?
+  farmId       String
+  fieldId      String?
+  source       DroneOperationSource
+  fileName     String
+  fileType     DroneOperationSource
+  status       DroneImportJobStatus @default(UPLOADED)
+  parsedJson   Json?
+  errorMessage String?              @db.Text
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([source])
+  @@index([fileType])
+  @@index([status])
+}
+
+model DroneOperationReview {
+  id                       String                     @id @default(cuid())
+  tenantId                 String?
+  farmId                   String
+  droneOperationId         String
+  status                   DroneOperationReviewStatus @default(PENDING)
+  reviewerId               String?
+  reviewNote               String?                    @db.Text
+  correctedFieldId         String?
+  correctedFieldBoundaryId String?
+  correctedCoverageGeoJson Json?
+  correctedRouteGeoJson    Json?
+  confirmedAreaMu          Float?
+  confirmedCoverageRate    Float?
+  confirmedMissedAreaMu    Float?
+  confirmedRepeatedAreaMu  Float?
+  createdAt                DateTime                   @default(now())
+  reviewedAt               DateTime?
+  updatedAt                DateTime                   @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([droneOperationId])
+  @@index([status])
+}
+
+model AIRecognitionJob {
+  id           String              @id @default(cuid())
+  tenantId     String?
+  farmId       String
+  type         AIRecognitionType
+  inputSource  String
+  inputJson    Json
+  status       AIRecognitionStatus @default(PENDING)
+  resultJson   Json?
+  confidence   Float?
+  errorMessage String?             @db.Text
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([type])
+  @@index([status])
+}
+
+model IrrigationDesign {
+  id                  String                 @id @default(cuid())
+  tenantId            String?
+  farmId              String
+  fieldId             String
+  fieldBoundaryId     String?
+  name                String
+  cropType            String
+  soilType            String
+  designMode          IrrigationDesignMode
+  area                Decimal?               @db.Decimal(12, 2)
+  areaMu              Float?
+  rowSpacing          Decimal?               @db.Decimal(10, 3)
+  plantSpacing        Decimal?               @db.Decimal(10, 3)
+  lateralSpacing      Decimal?               @db.Decimal(10, 3)
+  emitterFlowRate     Decimal?               @db.Decimal(10, 3)
+  emitterSpacing      Decimal?               @db.Decimal(10, 3)
+  targetFlowRate      Decimal?               @db.Decimal(12, 3)
+  targetPressure      Decimal?               @db.Decimal(10, 3)
+  sourceWaterPressure Decimal?               @db.Decimal(10, 3)
+  designJson          Json?
+  status              IrrigationDesignStatus @default(DRAFT)
+  zones               IrrigationDesignZone[]
+  boms                IrrigationBOM[]
+  hydraulicResults    HydraulicCheckResult[]
+  simulations         WettingSimulation[]
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([fieldBoundaryId])
+  @@index([status])
+}
+
+model IrrigationDesignZone {
+  id                   String           @id @default(cuid())
+  designId             String
+  design               IrrigationDesign @relation(fields: [designId], references: [id])
+  name                 String
+  area                 Decimal          @db.Decimal(12, 2)
+  valveDeviceId        String?
+  pipeLength           Decimal          @db.Decimal(12, 3)
+  pipeDiameter         Decimal          @db.Decimal(10, 3)
+  expectedFlowRate     Decimal?         @db.Decimal(12, 3)
+  expectedPressure     Decimal?         @db.Decimal(10, 3)
+  maxIrrigationMinutes Int?
+  createdAt            DateTime         @default(now())
+
+  @@index([designId])
+  @@index([valveDeviceId])
+}
+
+model IrrigationProduct {
+  id           String                    @id @default(cuid())
+  category     IrrigationProductCategory
+  name         String
+  spec         String
+  unit         String
+  unitPrice    Decimal?                  @db.Decimal(12, 2)
+  metadataJson Json?
+  isActive     Boolean                   @default(true)
+  createdAt    DateTime                  @default(now())
+
+  @@index([category])
+  @@index([isActive])
+}
+
+model IrrigationBOM {
+  id        String              @id @default(cuid())
+  designId  String
+  design    IrrigationDesign    @relation(fields: [designId], references: [id])
+  status    String              @default("GENERATED")
+  totalCost Decimal?            @db.Decimal(12, 2)
+  items     IrrigationBOMItem[]
+  createdAt DateTime            @default(now())
+
+  @@index([designId])
+}
+
+model IrrigationBOMItem {
+  id        String        @id @default(cuid())
+  bomId     String
+  bom       IrrigationBOM @relation(fields: [bomId], references: [id])
+  productId String?
+  name      String
+  category  IrrigationProductCategory
+  spec      String
+  quantity  Decimal       @db.Decimal(12, 3)
+  unit      String
+  unitPrice Decimal?      @db.Decimal(12, 2)
+  amount    Decimal?      @db.Decimal(12, 2)
+
+  @@index([bomId])
+  @@index([productId])
+}
+
+model HydraulicCheckResult {
+  id            String           @id @default(cuid())
+  designId      String
+  design        IrrigationDesign @relation(fields: [designId], references: [id])
+  zoneId        String?
+  inputJson     Json
+  resultJson    Json
+  pressureLoss  Decimal          @db.Decimal(10, 3)
+  endPressure   Decimal          @db.Decimal(10, 3)
+  flowVariation Decimal          @db.Decimal(10, 3)
+  isPassed      Boolean
+  warnings      Json
+  createdAt     DateTime         @default(now())
+
+  @@index([designId])
+  @@index([zoneId])
+}
+
+model CropIrrigationRecipe {
+  id                            String   @id @default(cuid())
+  tenantId                      String?
+  cropType                      String
+  cropStage                     String
+  soilType                      String?
+  targetMoistureMin             Decimal  @db.Decimal(10, 3)
+  targetMoistureMax             Decimal  @db.Decimal(10, 3)
+  recommendedIrrigationMinutes  Int
+  maxDailyIrrigationMinutes     Int?
+  fertigationAdvice             Json?
+  isActive                      Boolean  @default(true)
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([cropType, cropStage, soilType])
+  @@index([isActive])
+}
+
+model WettingSimulation {
+  id                    String            @id @default(cuid())
+  tenantId              String?
+  farmId                String?
+  fieldId               String
+  designId              String?
+  design                IrrigationDesign? @relation(fields: [designId], references: [id])
+  cropType              String
+  soilType              String
+  emitterFlowRate       Decimal           @db.Decimal(10, 3)
+  irrigationMinutes     Int
+  surfaceWettingRange   Decimal?          @db.Decimal(10, 3)
+  rootZoneWettingRange  Decimal?          @db.Decimal(10, 3)
+  deepPercolationRisk   DeepPercolationRisk
+  resultJson            Json?
+  createdAt             DateTime          @default(now())
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([designId])
+}
+
+model SafetyPolicy {
+  id                                String   @id @default(cuid())
+  tenantId                          String?
+  farmId                            String?
+  fieldId                           String?
+  name                              String
+  maxIrrigationMinutesPerAction     Int?
+  maxDailyIrrigationMinutesPerField Int?
+  maxDailyWaterUsage                Float?
+  allowAutoExecution                Boolean  @default(false)
+  requireApprovalRiskLevel          String?
+  emergencyStopEnabled              Boolean  @default(false)
+  isActive                          Boolean  @default(true)
+  createdAt                         DateTime @default(now())
+  updatedAt                         DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([isActive])
+}
+
+model AutoExecutionPolicy {
+  id                 String   @id @default(cuid())
+  tenantId           String?
+  farmId             String
+  fieldId            String?
+  deviceId           String?
+  isWhitelisted      Boolean  @default(false)
+  maxRiskLevel       String?
+  allowedActionTypes Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([deviceId])
+}
+
+model ActionQueueJob {
+  id                String               @id @default(cuid())
+  tenantId          String?
+  farmId            String
+  actionPlanId      String
+  actionExecutionId String?
+  status            ActionQueueJobStatus @default(PENDING)
+  retryCount        Int                  @default(0)
+  maxRetries        Int                  @default(3)
+  lastError         String?              @db.Text
+  scheduledAt       DateTime?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  createdAt         DateTime             @default(now())
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([actionPlanId])
+  @@index([status])
+}
+
+model EventLog {
+  id         String   @id @default(cuid())
+  tenantId   String?
+  farmId     String?
+  userId     String?
+  eventType  String
+  entityType String?
+  entityId   String?
+  severity   String?
+  ip         String?
+  userAgent  String?
+  requestId  String?
+  payload    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([userId])
+  @@index([eventType])
+  @@index([entityType, entityId])
+  @@index([requestId])
+}
+
+model AuditEvent {
+  id         String        @id @default(cuid())
+  tenantId   String?
+  userId     String?
+  eventType  String
+  severity   AuditSeverity @default(INFO)
+  entityType String?
+  entityId   String?
+  ip         String?
+  userAgent  String?
+  requestId  String?
+  payload    Json?
+  createdAt  DateTime      @default(now())
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([eventType])
+  @@index([severity])
+  @@index([entityType, entityId])
+  @@index([requestId])
+  @@index([createdAt])
+}
+
+model DeviceTelemetrySnapshot {
+  id                    String   @id @default(cuid())
+  tenantId              String?
+  farmId                String?
+  fieldId               String?
+  deviceId              String
+  thingsboardDeviceId   String?
+  pressureKpa           Decimal? @db.Decimal(12, 3)
+  flowRateM3h           Decimal? @db.Decimal(12, 3)
+  valveOpeningPercent   Decimal? @db.Decimal(12, 3)
+  pumpFrequencyHz       Decimal? @db.Decimal(12, 3)
+  pumpRunningStatus     String?
+  fertilizerTankLevelL  Decimal? @db.Decimal(12, 3)
+  waterTankLevelL       Decimal? @db.Decimal(12, 3)
+  batteryPercent        Decimal? @db.Decimal(12, 3)
+  signalStrength        Decimal? @db.Decimal(12, 3)
+  normalizedJson        Json?
+  rawPayload            Json?
+  reportedAt            DateTime
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([deviceId])
+  @@unique([deviceId])
+}
+
+model IrrigationRotationGroup {
+  id                 String                        @id @default(cuid())
+  tenantId           String?
+  farmId             String
+  name               String
+  fieldId            String?
+  irrigationDesignId String?
+  status             IrrigationRotationGroupStatus @default(ACTIVE)
+  targetPressureKpa  Decimal?                      @db.Decimal(12, 3)
+  targetFlowRate     Decimal?                      @db.Decimal(12, 3)
+  metadata           Json?
+  valves             IrrigationRotationValve[]
+  schedules          IrrigationRotationSchedule[]
+  runs               IrrigationRotationRun[]
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([irrigationDesignId])
+  @@index([status])
+}
+
+model IrrigationRotationValve {
+  id                    String                  @id @default(cuid())
+  groupId               String
+  group                 IrrigationRotationGroup @relation(fields: [groupId], references: [id])
+  deviceId              String
+  fieldId               String?
+  zoneId                String?
+  valveOrder            Int
+  targetOpeningPercent  Decimal?                @db.Decimal(12, 3)
+  maxIrrigationMinutes  Int?
+  createdAt             DateTime                @default(now())
+
+  @@index([groupId])
+  @@index([deviceId])
+  @@index([fieldId])
+  @@index([zoneId])
+}
+
+model IrrigationRotationSchedule {
+  id           String                  @id @default(cuid())
+  tenantId     String?
+  farmId       String
+  groupId      String
+  group        IrrigationRotationGroup @relation(fields: [groupId], references: [id])
+  name         String
+  scheduleJson Json
+  isActive     Boolean                 @default(true)
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([groupId])
+  @@index([isActive])
+}
+
+model IrrigationRotationRun {
+  id          String                      @id @default(cuid())
+  tenantId    String?
+  farmId      String
+  groupId     String
+  group       IrrigationRotationGroup     @relation(fields: [groupId], references: [id])
+  scheduleId  String?
+  status      IrrigationRotationRunStatus @default(PENDING)
+  actionPlanId String?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  resultJson  Json?
+  createdAt   DateTime                    @default(now())
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([groupId])
+  @@index([scheduleId])
+  @@index([status])
+}
+
+model IrrigationAnomalyRule {
+  id            String                  @id @default(cuid())
+  tenantId      String?
+  farmId        String?
+  name          String
+  type          IrrigationAnomalyType
+  thresholdJson Json
+  isActive      Boolean                 @default(true)
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([type])
+  @@index([isActive])
+}
+
+model IrrigationAnomalyEvent {
+  id           String                 @id @default(cuid())
+  tenantId     String?
+  farmId       String?
+  fieldId      String?
+  deviceId     String?
+  type         IrrigationAnomalyType
+  severity     AnomalySeverity
+  message      String                 @db.Text
+  snapshotJson Json?
+  handled      Boolean                @default(false)
+  createdAt    DateTime               @default(now())
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([deviceId])
+  @@index([type])
+  @@index([handled])
+}
+
+model FertilizerTank {
+  id             String               @id @default(cuid())
+  tenantId       String?
+  farmId         String
+  name           String
+  deviceId       String?
+  capacityL      Decimal?             @db.Decimal(12, 3)
+  currentLevelL  Decimal?             @db.Decimal(12, 3)
+  fertilizerType String?
+  status         FertilizerTankStatus @default(ACTIVE)
+  tasks          FertigationTask[]
+  dissolveTasks  DissolveFertilizerTask[]
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([deviceId])
+  @@index([status])
+}
+
+model FertigationRecipe {
+  id                         String   @id @default(cuid())
+  tenantId                   String?
+  farmId                     String?
+  cropType                   String?
+  cropStage                  String?
+  name                       String
+  recipeJson                 Json
+  recommendedDurationMinutes Int?
+  isActive                   Boolean  @default(true)
+  tasks                      FertigationTask[]
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([cropType, cropStage])
+  @@index([isActive])
+}
+
+model FertigationTask {
+  id                      String                @id @default(cuid())
+  tenantId                String?
+  farmId                  String
+  fieldId                 String?
+  rotationGroupId         String?
+  tankId                  String?
+  tank                    FertilizerTank?       @relation(fields: [tankId], references: [id])
+  recipeId                String?
+  recipe                  FertigationRecipe?    @relation(fields: [recipeId], references: [id])
+  status                  FertigationTaskStatus @default(DRAFT)
+  durationMinutes         Int?
+  targetWaterVolume       Decimal?              @db.Decimal(12, 3)
+  targetFertilizerVolume  Decimal?              @db.Decimal(12, 3)
+  actionPlanId            String?
+  resultJson              Json?
+  createdAt               DateTime              @default(now())
+  startedAt               DateTime?
+  finishedAt              DateTime?
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([rotationGroupId])
+  @@index([tankId])
+  @@index([recipeId])
+  @@index([status])
+}
+
+model DissolveFertilizerTask {
+  id                  String                       @id @default(cuid())
+  tenantId            String?
+  farmId              String
+  tankId              String
+  tank                FertilizerTank               @relation(fields: [tankId], references: [id])
+  status              DissolveFertilizerTaskStatus @default(PENDING)
+  waterVolumeL        Decimal?                     @db.Decimal(12, 3)
+  fertilizerWeightKg  Decimal?                     @db.Decimal(12, 3)
+  durationMinutes     Int?
+  resultJson          Json?
+  createdAt           DateTime                     @default(now())
+  startedAt           DateTime?
+  finishedAt          DateTime?
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([tankId])
+  @@index([status])
+}
+
+model OperationReport {
+  id          String              @id @default(cuid())
+  tenantId    String?
+  farmId      String
+  type        OperationReportType
+  refId       String?
+  title       String
+  summaryJson Json
+  metricsJson Json?
+  createdAt   DateTime            @default(now())
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([type])
+  @@index([refId])
+}
+
+model CropHealthObservation {
+  id               String                      @id @default(cuid())
+  tenantId         String?
+  farmId           String
+  fieldId          String?
+  droneOperationId String?
+  source           CropHealthObservationSource
+  type             CropHealthObservationType
+  severity         String?
+  title            String
+  description      String?                     @db.Text
+  locationGeoJson  Json?
+  imageUrls        Json?
+  metadata         Json?
+  createdAt        DateTime                    @default(now())
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([droneOperationId])
+  @@index([source])
+  @@index([type])
+}
+
+model YieldRecord {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  farmId      String
+  fieldId     String
+  cropType    String?
+  cropSeason  String?
+  yieldKg     Float?
+  areaMu      Float?
+  yieldPerMu  Float?
+  source      String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([cropSeason])
+}
+
+model YieldFactor {
+  id          String          @id @default(cuid())
+  tenantId    String?
+  farmId      String
+  fieldId     String
+  cropSeason  String?
+  factorType  YieldFactorType
+  refType     String?
+  refId       String?
+  valueJson   Json?
+  createdAt   DateTime        @default(now())
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([cropSeason])
+  @@index([factorType])
+  @@index([refType, refId])
+}
+
+model FarmActivity {
+  id          String           @id @default(cuid())
+  tenantId    String?
+  farmId      String
+  fieldId     String?
+  type        FarmActivityType
+  title       String
+  description String?          @db.Text
+  refType     String?
+  refId       String?
+  metadata    Json?
+  createdAt   DateTime         @default(now())
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([type])
+  @@index([refType, refId])
+}
+
+model DeviceInstallationCheck {
+  id                  String               @id @default(cuid())
+  tenantId            String?
+  farmId              String
+  fieldId             String?
+  deviceId            String?
+  thingsboardDeviceId String?
+  deviceCode          String
+  deviceType          String
+  installerName       String?
+  status              InstallerCheckStatus @default(PENDING)
+  telemetryOk         Boolean              @default(false)
+  signalOk            Boolean              @default(false)
+  batteryOk           Boolean              @default(false)
+  rpcTestOk           Boolean              @default(false)
+  bindingOk           Boolean              @default(false)
+  notes               String?              @db.Text
+  checkedAt           DateTime?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([deviceId])
+  @@index([thingsboardDeviceId])
+  @@index([status])
+}
+
+model EdgeGateway {
+  id          String            @id @default(cuid())
+  tenantId    String?
+  farmId      String
+  name        String
+  code        String            @unique
+  baseUrl     String?
+  status      EdgeGatewayStatus @default(OFFLINE)
+  lastSeenAt  DateTime?
+  metadata    Json?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([status])
+}
+
+model EdgeDeviceBinding {
+  id          String   @id @default(cuid())
+  tenantId    String?
+  farmId      String
+  gatewayId   String
+  deviceId    String
+  localAddress String?
+  protocol    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([gatewayId])
+  @@index([deviceId])
+  @@unique([gatewayId, deviceId])
+}
+
+model EdgeCommand {
+  id          String            @id @default(cuid())
+  tenantId    String?
+  farmId      String
+  gatewayId   String?
+  deviceId    String?
+  command     String
+  payload     Json?
+  status      EdgeCommandStatus @default(PENDING)
+  requestId   String?           @unique
+  resultJson  Json?
+  errorMessage String?          @db.Text
+  createdAt   DateTime          @default(now())
+  sentAt       DateTime?
+  ackAt        DateTime?
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([gatewayId])
+  @@index([deviceId])
+  @@index([status])
+}
+
+model AIRecommendation {
+  id                    String                     @id @default(cuid())
+  tenantId              String?
+  farmId                String
+  fieldId               String?
+  type                  AIRecommendationType
+  severity              AIRecommendationSeverity   @default(LOW)
+  status                AIRecommendationStatus     @default(ACTIVE)
+  title                 String
+  summary               String                     @db.Text
+  explanation           String                     @db.Text
+  evidenceJson          Json?
+  recommendedActionJson Json?
+  source                String                     @default("rule_pipeline")
+  confidence            Decimal?                   @db.Decimal(5, 2)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  expiresAt             DateTime?
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([fieldId])
+  @@index([type])
+  @@index([severity])
+  @@index([status])
+}
+
+model BluetoothSession {
+  id                String                 @id @default(cuid())
+  tenantId          String?
+  farmId            String?
+  userId            String
+  deviceId          String?
+  sessionCode       String                 @unique
+  status            BluetoothSessionStatus @default(PENDING)
+  allowedOperations Json?
+  expiresAt         DateTime
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([userId])
+  @@index([deviceId])
+  @@index([status])
+}
+
+model BluetoothOperationLog {
+  id            String                 @id @default(cuid())
+  tenantId      String?
+  farmId        String?
+  sessionId     String
+  userId        String
+  deviceId      String?
+  operationType BluetoothOperationType
+  payload       Json?
+  result        Json?
+  success       Boolean                @default(true)
+  errorMessage  String?                @db.Text
+  createdAt     DateTime               @default(now())
+
+  @@index([tenantId])
+  @@index([farmId])
+  @@index([sessionId])
+  @@index([userId])
+  @@index([deviceId])
+  @@index([operationType])
+}
+
+enum UserRole {
+  FARMER
+  LARGE_GROWER
+  COOPERATIVE_ADMIN
+  DRONE_PILOT
+  MACHINERY_PROVIDER
+  INPUT_STORE
+  PLATFORM_ADMIN
+  TENANT_ADMIN
+  FARM_MANAGER
+  OPERATOR
+  VIEWER
+  INSTALLER
+  MAINTAINER
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum AuditSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum FarmType {
+  FAMILY
+  COOPERATIVE
+  COMPANY
+}
+
+enum LandSource {
+  SELF
+  LEASED
+  CONTRACTED
+}
+
+enum CropSeasonStatus {
+  PLANNED
+  GROWING
+  HARVESTED
+  CLOSED
+}
+
+enum FarmInputType {
+  SEED
+  FERTILIZER
+  PESTICIDE
+  FILM
+  IRRIGATION_MATERIAL
+  OTHER
+}
+
+enum WorkLogType {
+  SOWING
+  WATERING
+  FERTILIZING
+  PESTICIDE
+  WEEDING
+  TILLAGE
+  MULCHING
+  DRONE
+  MACHINERY
+  LABOR
+  HARVEST
+  OTHER
+}
+
+enum DeviceType {
+  SOIL_SENSOR
+  WEATHER_SENSOR
+  PUMP
+  VALVE
+  FLOW_METER
+  WATER_LEVEL
+  WEATHER_STATION
+  GATEWAY
+  CAMERA
+  OTHER
+}
+
+enum SensorRecordType {
+  SOIL_MOISTURE
+  TEMPERATURE
+  HUMIDITY
+  FLOW
+  WATER_LEVEL
+}
+
+enum IrrigationMode {
+  MANUAL
+  AUTO
+  SCHEDULED
+  ADVICE_EXECUTED
+}
+
+enum IrrigationRecordStatus {
+  RUNNING
+  FINISHED
+  CANCELLED
+  FAILED
+}
+
+enum DeviceCommandStatus {
+  PENDING
+  SENT
+  ACKED
+  FAILED
+  TIMEOUT
+}
+
+enum ServiceProviderType {
+  DRONE_PILOT
+  MACHINERY_SERVICE
+  TECHNICIAN
+  INPUT_STORE
+  SEED_CHANNEL
+  FERTILIZER_CHANNEL
+  PESTICIDE_CHANNEL
+}
+
+enum CostType {
+  SEED
+  FERTILIZER
+  PESTICIDE
+  LABOR
+  DRONE
+  MACHINERY
+  IRRIGATION
+  ELECTRICITY
+  RENT
+  OTHER
+}
+
+enum IrrigationAdviceAction {
+  SHOULD_IRRIGATE
+  NORMAL
+  STOP_IRRIGATION
+}
+
+enum IrrigationAdviceSource {
+  MQTT
+  MANUAL_TEST
+  SYSTEM
+  THINGSBOARD
+  TELEMETRY
+}
+
+enum IoTDeviceStatus {
+  ACTIVE
+  BOUND
+  UNBOUND
+  ONLINE
+  INACTIVE
+  OFFLINE
+  DISABLED
+}
+
+enum DeviceBindingSource {
+  MANUAL
+  THINGSBOARD_ATTRIBUTE
+  THINGSBOARD_RELATION
+  UNKNOWN
+}
+
+enum WebhookDeadLetterStatus {
+  PENDING
+  RETRIED
+  RESOLVED
+  IGNORED
+}
+
+enum IrrigationAdviceStatus {
+  PENDING
+  CONFIRMED
+  IGNORED
+  EXECUTED
+}
+
+enum FieldRiskLevel {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum DecisionType {
+  IRRIGATION
+  DEVICE_HEALTH
+  FIELD_RISK
+}
+
+enum DecisionRecommendation {
+  NO_ACTION
+  SHOULD_IRRIGATE
+  STOP_IRRIGATION
+  CHECK_DEVICE
+}
+
+enum DecisionStatus {
+  PROPOSED
+  PLANNED
+  EXECUTED
+  SKIPPED
+  FAILED
+}
+
+enum ActionPlanStatus {
+  PLANNED
+  PENDING_APPROVAL
+  BLOCKED
+  EXECUTING
+  EXECUTED
+  SKIPPED
+  FAILED
+}
+
+enum ActionExecutionStatus {
+  PENDING
+  SENT
+  ACKED
+  FAILED
+  SKIPPED
+}
+
+enum TenantType {
+  FARM_OWNER
+  COOP
+  ENTERPRISE
+  GOVERNMENT
+  DEMO
+  COMPANY
+  FARM_GROUP
+  COOPERATIVE
+  FAMILY_FARM
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+  CLOSED
+}
+
+enum BillingStatus {
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CLOSED
+}
+
+enum UsageType {
+  DEVICE_ONLINE
+  AI_DECISION
+  IRRIGATION_ACTION
+  WATER_USAGE
+  SMS_ALERT
+  MAP_RECOGNITION
+  DRONE_OPERATION
+  DRONE_OPERATION_REPORT
+  DRONE_JOB
+  DEVICE_EXECUTION
+  DEVICE_ONLINE_DAY
+  HECTARE_MONTH
+}
+
+enum OperationCostCategory {
+  PESTICIDE
+  FERTILIZER
+  WATER
+  ELECTRICITY
+  LABOR
+  DRONE_SERVICE
+  MACHINE
+  OTHER
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  PAID
+  CANCELLED
+  VOID
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum ApprovalType {
+  ACTION_PLAN
+  AUTO_EXECUTION
+  HIGH_RISK_DECISION
+  MANUAL_OVERRIDE
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACKED
+  RESOLVED
+}
+
+enum BoundarySource {
+  MANUAL_DRAW
+  HANDHELD_GPS
+  DRONE_FLIGHT
+  DRONE_ORTHOMOSAIC
+  GOOGLE_MAP
+  AMAP
+  BAIDU_MAP
+  AI_RECOGNITION
+}
+
+enum BoundaryStatus {
+  CANDIDATE
+  REVIEWED
+  APPROVED
+  ARCHIVED
+}
+
+enum CoordinateSystem {
+  WGS84
+  GCJ02
+  BD09
+}
+
+enum MapLayerType {
+  FIELD
+  OBSTACLE
+  WATER
+  ROAD
+  PIPELINE
+  DEVICE
+  DRONE_ROUTE
+  IRRIGATION_ZONE
+  ORTHOMOSAIC
+}
+
+enum DroneMapJobStatus {
+  UPLOADED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum DroneOperationType {
+  MAPPING
+  SPRAYING
+  SPREADING
+  SCOUTING
+  SEEDING
+}
+
+enum DroneOperationSource {
+  DJI_SMARTFARM
+  DJI_TERRA
+  DJI_PILOT
+  DJI_REMOTE_CONTROLLER
+  KML
+  KMZ
+  GEOJSON
+  GEOTIFF
+  CSV
+  FLIGHT_RECORD_ZIP
+  MANUAL_IMPORT
+}
+
+enum DroneOperationStatus {
+  IMPORTED
+  PARSED
+  LINKED
+  REVIEWED
+  ARCHIVED
+}
+
+enum DroneImportJobStatus {
+  UPLOADED
+  PARSING
+  PARSED
+  FAILED
+}
+
+enum DroneOperationReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_MANUAL_LINK
+  NEEDS_BOUNDARY_FIX
+}
+
+enum AIRecognitionType {
+  FIELD_BOUNDARY
+  WATER_BODY
+  OBSTACLE
+  ROAD
+  TREE_ROW
+  IRRIGATION_ZONE
+}
+
+enum AIRecognitionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum IrrigationDesignMode {
+  DRIP
+  SPRINKLER
+  PIVOT
+  MICRO_SPRAY
+}
+
+enum IrrigationDesignStatus {
+  DRAFT
+  CHECKED
+  APPROVED
+  ARCHIVED
+}
+
+enum IrrigationProductCategory {
+  DRIPLINE
+  VALVE
+  FILTER
+  PIPE
+  CONNECTOR
+  SENSOR
+  CONTROLLER
+  FERTIGATION
+}
+
+enum BOMStatus {
+  DRAFT
+  GENERATED
+  APPROVED
+  ARCHIVED
+}
+
+enum DeepPercolationRisk {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ActionQueueJobStatus {
+  PENDING
+  QUEUED
+  EXECUTING
+  SUCCESS
+  FAILED
+  RETRYING
+  DEAD_LETTERED
+}
+
+enum IrrigationRotationGroupStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum IrrigationRotationRunStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum IrrigationAnomalyType {
+  PRESSURE_DROP
+  PRESSURE_TOO_HIGH
+  FLOW_TOO_LOW
+  FLOW_TOO_HIGH
+  VALVE_NOT_RESPONDING
+  PUMP_ABNORMAL
+  TANK_LOW_LEVEL
+}
+
+enum AnomalySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum FertilizerTankStatus {
+  ACTIVE
+  LOW_LEVEL
+  EMPTY
+  OFFLINE
+  ARCHIVED
+}
+
+enum FertigationTaskStatus {
+  DRAFT
+  PENDING_APPROVAL
+  QUEUED
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+  BLOCKED
+}
+
+enum DissolveFertilizerTaskStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum OperationReportType {
+  IRRIGATION
+  FERTIGATION
+  ROTATION
+  DEVICE_INSPECTION
+  ANOMALY
+  DRONE_MAPPING
+  DRONE_SPRAYING
+  DRONE_SPREADING
+  DRONE_SCOUTING
+}
+
+enum CropHealthObservationSource {
+  DRONE_SCOUTING
+  MANUAL
+  SENSOR
+  AI_RECOGNITION
+}
+
+enum CropHealthObservationType {
+  PEST
+  DISEASE
+  WEED
+  WATER_STRESS
+  NUTRIENT_STRESS
+  UNKNOWN
+}
+
+enum YieldFactorType {
+  IRRIGATION
+  FERTIGATION
+  DRONE_SPRAYING
+  DRONE_SCOUTING
+  PEST_DISEASE
+  WEATHER
+  SOIL_MOISTURE
+  MANUAL_NOTE
+}
+
+enum FarmActivityType {
+  SENSOR_ALERT
+  IRRIGATION_STARTED
+  IRRIGATION_COMPLETED
+  FERTIGATION_STARTED
+  FERTIGATION_COMPLETED
+  ROTATION_STARTED
+  ROTATION_COMPLETED
+  DRONE_OPERATION_IMPORTED
+  DRONE_OPERATION_REVIEWED
+  DRONE_SPRAYING_COMPLETED
+  DRONE_MAPPING_COMPLETED
+  DEVICE_OFFLINE
+  DEVICE_RECOVERED
+  AI_DECISION_CREATED
+  MANUAL_OPERATION
+}
+
+enum InstallerCheckStatus {
+  PENDING
+  PASSED
+  FAILED
+  NEEDS_RECHECK
+}
+
+enum EdgeGatewayStatus {
+  ONLINE
+  OFFLINE
+  DEGRADED
+  MAINTENANCE
+}
+
+enum EdgeCommandStatus {
+  PENDING
+  SENT
+  ACKED
+  FAILED
+  TIMEOUT
+}
+
+enum AIRecommendationType {
+  IRRIGATION
+  FERTIGATION
+  DEVICE_RISK
+  PRESSURE_FLOW
+  DRONE_COVERAGE
+  CROP_HEALTH
+  COST_RISK
+  YIELD_FACTOR
+  SYSTEM_SAFETY
+}
+
+enum AIRecommendationSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AIRecommendationStatus {
+  ACTIVE
+  DISMISSED
+  RESOLVED
+  EXPIRED
+}
+
+enum BluetoothSessionStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  EXPIRED
+  REVOKED
+}
+
+enum BluetoothOperationType {
+  SCAN_DEVICE
+  READ_DEVICE_INFO
+  CONFIGURE_DEVICE
+  BIND_DEVICE
+  TEST_VALVE
+  TEST_SENSOR
+  READ_STATUS
+  EMERGENCY_STOP
+  MAINTENANCE_CHECK
+}

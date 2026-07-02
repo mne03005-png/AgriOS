@@ -1,0 +1,7 @@
+{
+  "name": "AgriOS Pressure Sensor Profile",
+  "type": "PRESSURE_SENSOR",
+  "telemetryKeys": ["pressureKpa", "batteryPercent", "signalStrength"],
+  "attributes": ["farmId", "fieldId", "zoneId", "deviceCode", "installerName", "calibrationStatus"],
+  "alarms": ["pressureTooLow", "pressureTooHigh", "offline"]
+}

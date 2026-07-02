@@ -1,0 +1,11 @@
+{
+  "name": "AgriOS Installer Dashboard Template",
+  "widgets": [
+    "device online status",
+    "telemetry latest values",
+    "pressure/flow curve",
+    "signal/battery panel",
+    "installer checklist"
+  ],
+  "note": "Skeleton dashboard reference for field installation and acceptance."
+}

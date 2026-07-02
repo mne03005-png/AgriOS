@@ -1,0 +1,5 @@
+{
+  "name": "AgriOS Alarm Rule Chain",
+  "alarms": ["offline", "lowBattery", "lowSignal", "pressureAbnormal", "flowAbnormal"],
+  "note": "Skeleton alarm rule chain aligned with AgriOS installer workflow."
+}
