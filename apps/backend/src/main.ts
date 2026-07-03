@@ -6,6 +6,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { getCurrentUserId, HeaderLike } from './common/request-user.helper';
 import { RequestContextService } from './common/request-context.service';
+import { requestLoggerMiddleware } from './common/logging/request-logger.middleware';
 import { requestIdMiddleware } from './common/request-id.middleware';
 import { QueryFilterInterceptor } from './modules/tenant/query-filter.interceptor';
 import { PrismaService } from './prisma/prisma.service';
@@ -43,6 +44,7 @@ async function bootstrap() {
       next
     );
   });
+  app.use(requestLoggerMiddleware);
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(app.get(QueryFilterInterceptor), new TransformInterceptor());
   app.useGlobalPipes(
