@@ -190,10 +190,12 @@ model Device {
 model SensorRecord {
   id         String           @id @default(cuid())
   tenantId   String?
+  farmId     String?
   deviceId   String?
   device     Device?          @relation(fields: [deviceId], references: [id])
   fieldId    String?
   field      Field?           @relation(fields: [fieldId], references: [id])
+  eventId    String?          @unique
   deviceName String?
   thingsboardDeviceId String?
   type       SensorRecordType
@@ -207,11 +209,17 @@ model SensorRecord {
   normalizedJson Json?
   source       String         @default("thingsboard")
   reportedAt DateTime
+  receivedAt DateTime         @default(now())
+  qualityStatus TelemetryQualityStatus @default(GOOD)
+  qualityScore Int            @default(100)
   createdAt  DateTime         @default(now())
 
   @@index([deviceId, reportedAt])
   @@index([fieldId, reportedAt])
   @@index([tenantId])
+  @@index([farmId])
+  @@index([qualityStatus])
+  @@index([receivedAt])
 }
 
 model IrrigationRecord {
@@ -343,6 +351,8 @@ model IoTWebhookDeadLetter {
   id                  String                  @id @default(cuid())
   tenantId            String?
   source              String                  @default("thingsboard")
+  originalSource      String?
+  eventId             String?
   eventType           String
   deviceName          String?
   thingsboardDeviceId String?
@@ -359,6 +369,7 @@ model IoTWebhookDeadLetter {
   @@index([source, eventType])
   @@index([status, createdAt])
   @@index([thingsboardDeviceId])
+  @@index([eventId])
   @@index([tenantId])
 }
 
@@ -1114,8 +1125,15 @@ model DeviceTelemetrySnapshot {
   fieldId               String?
   deviceId              String
   thingsboardDeviceId   String?
+  soilMoisture          Decimal? @db.Decimal(12, 3)
+  soilTemperature       Decimal? @db.Decimal(12, 3)
+  airTemperature        Decimal? @db.Decimal(12, 3)
+  airHumidity           Decimal? @db.Decimal(12, 3)
+  lightLux              Decimal? @db.Decimal(12, 3)
+  co2Ppm                Decimal? @db.Decimal(12, 3)
   pressureKpa           Decimal? @db.Decimal(12, 3)
   flowRateM3h           Decimal? @db.Decimal(12, 3)
+  waterLevel            Decimal? @db.Decimal(12, 3)
   valveOpeningPercent   Decimal? @db.Decimal(12, 3)
   pumpFrequencyHz       Decimal? @db.Decimal(12, 3)
   pumpRunningStatus     String?
@@ -1123,9 +1141,14 @@ model DeviceTelemetrySnapshot {
   waterTankLevelL       Decimal? @db.Decimal(12, 3)
   batteryPercent        Decimal? @db.Decimal(12, 3)
   signalStrength        Decimal? @db.Decimal(12, 3)
+  gatewayOnline         Boolean?
+  source                String   @default("thingsboard")
   normalizedJson        Json?
   rawPayload            Json?
   reportedAt            DateTime
+  receivedAt            DateTime @default(now())
+  qualityStatus         TelemetryQualityStatus @default(GOOD)
+  qualityScore          Int      @default(100)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -1133,6 +1156,8 @@ model DeviceTelemetrySnapshot {
   @@index([farmId])
   @@index([fieldId])
   @@index([deviceId])
+  @@index([qualityStatus])
+  @@index([receivedAt])
   @@unique([deviceId])
 }
 
@@ -1695,6 +1720,15 @@ enum SensorRecordType {
   HUMIDITY
   FLOW
   WATER_LEVEL
+}
+
+enum TelemetryQualityStatus {
+  GOOD
+  WARNING
+  INVALID
+  STALE
+  DUPLICATE
+  CLOCK_DRIFT
 }
 
 enum IrrigationMode {

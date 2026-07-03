@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ListQueryDto } from '../../common/dto/list-query.dto';
 import { getPagination, paginatedResult } from '../../common/pagination';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RequestContextService } from '../../common/request-context.service';
 import { OperationLogService } from '../operation-log/operation-log.service';
 import { BindPlotDto } from './dto/bind-plot.dto';
 import { ConfirmBindingCandidateDto } from './dto/confirm-binding-candidate.dto';
@@ -17,7 +18,8 @@ export class IotDeviceService {
     private readonly prisma: PrismaService,
     private readonly thingsBoardClient: ThingsBoardClientService,
     private readonly operationLogService: OperationLogService,
-    private readonly syncAuditService: IotSyncAuditService
+    private readonly syncAuditService: IotSyncAuditService,
+    private readonly requestContext: RequestContextService
   ) {}
 
   findByDeviceName(deviceName?: string) {
@@ -47,7 +49,7 @@ export class IotDeviceService {
 
   async findAll(query: ListQueryDto = {}) {
     const { page, pageSize, skip, take } = getPagination(query);
-    const where = query.keyword ? { OR: [{ name: { contains: query.keyword } }, { code: { contains: query.keyword } }] } : {};
+    const where = this.tenantWhere(query.keyword ? { OR: [{ name: { contains: query.keyword } }, { code: { contains: query.keyword } }] } : {});
     const [items, total] = await this.prisma.$transaction([
       this.prisma.device.findMany({ where, skip, take, orderBy: { createdAt: 'desc' }, include: { field: true } }),
       this.prisma.device.count({ where })
@@ -56,9 +58,30 @@ export class IotDeviceService {
   }
 
   async findOne(id: string) {
-    const device = await (this.prisma as any).device.findUnique({ where: { id }, include: { field: true } });
+    const device = await (this.prisma as any).device.findFirst({ where: this.tenantWhere({ id }), include: { field: true } });
     if (!device) throw new NotFoundException('IoT device not found');
     return device;
+  }
+
+  async findByField(fieldId: string, query: ListQueryDto = {}) {
+    const { page, pageSize, skip, take } = getPagination(query);
+    const where = this.tenantWhere({ fieldId });
+    const [items, total] = await this.prisma.$transaction([
+      (this.prisma as any).device.findMany({ where, skip, take, orderBy: { createdAt: 'desc' }, include: { field: true } }),
+      (this.prisma as any).device.count({ where })
+    ]);
+    return paginatedResult(items, page, pageSize, total);
+  }
+
+  status() {
+    return {
+      readOnly: true,
+      controlEnabled: false,
+      deviceControlMode: process.env.DEVICE_CONTROL_MODE ?? 'MOCK',
+      deviceControlDryRun: (process.env.DEVICE_CONTROL_DRY_RUN ?? 'true').toLowerCase() === 'true',
+      valveAllowRealControl: (process.env.VALVE_ALLOW_REAL_CONTROL ?? 'false').toLowerCase() === 'true',
+      enableAutoExecution: (process.env.ENABLE_AUTO_EXECUTION ?? 'false').toLowerCase() === 'true'
+    };
   }
 
   create(dto: CreateIotDeviceDto) {
@@ -132,7 +155,7 @@ export class IotDeviceService {
   }
 
   async getHealth(id: string) {
-    const device = await (this.prisma as any).device.findUnique({ where: { id }, include: { field: true } });
+    const device = await (this.prisma as any).device.findFirst({ where: this.tenantWhere({ id }), include: { field: true } });
     if (!device) throw new NotFoundException('IoT device not found');
 
     const lastTelemetryAt = device.lastTelemetryAt ?? device.lastReportedAt;
@@ -709,5 +732,11 @@ export class IotDeviceService {
 
   private errorMessage(error: unknown) {
     return error instanceof Error ? error.message : String(error);
+  }
+
+  private tenantWhere<T extends Record<string, unknown>>(where: T) {
+    const tenantId = this.requestContext.getTenantId();
+    if (!tenantId || this.requestContext.isPlatformAdmin()) return where;
+    return { ...where, tenantId };
   }
 }

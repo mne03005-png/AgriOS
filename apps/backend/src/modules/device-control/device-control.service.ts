@@ -34,6 +34,18 @@ export class DeviceControlService {
   async send(deviceId: string, dto: DeviceControlCommandDto & { adapter?: AdapterAlias | DeviceControlMode }) {
     this.validatePayload(dto);
     const mode = this.resolveMode(dto.adapter);
+    if (this.isReadOnlyControlMode(mode)) {
+      const result = {
+        ok: false,
+        code: 'READ_ONLY_MODE',
+        reason: 'Device control is disabled. Telemetry access is read-only.',
+        mode,
+        deviceId,
+        command: dto.command
+      };
+      await this.recordAttempt(deviceId, dto.command, mode, result);
+      return result;
+    }
     const controller = this.controllerForMode(mode);
     const payload = { remark: dto.remark, ...(dto.payload ?? {}) };
     const result = await this.dispatch(controller, deviceId, dto.command, payload);
@@ -78,6 +90,7 @@ export class DeviceControlService {
     const mode = normalizeDeviceControlMode(this.config.get<string>('DEVICE_CONTROL_MODE'));
     return {
       mode,
+      readOnly: this.isReadOnlyControlMode(mode),
       enableAutoExecution: (this.config.get<string>('ENABLE_AUTO_EXECUTION') ?? 'false').toLowerCase() === 'true',
       bluetoothLocalEnabled: (this.config.get<string>('ENABLE_BLUETOOTH_LOCAL') ?? 'false').toLowerCase() === 'true',
       message: 'ThingsBoard is the device room; AgriOS is the agricultural cockpit.'
@@ -103,6 +116,13 @@ export class DeviceControlService {
     if (mode === 'PLC_GATEWAY') return this.plcController;
     if (mode === 'BLUETOOTH_LOCAL') return this.bluetoothController;
     return this.mockController;
+  }
+
+  private isReadOnlyControlMode(mode: DeviceControlMode) {
+    const dryRun = (this.config.get<string>('DEVICE_CONTROL_DRY_RUN') ?? 'true').toLowerCase() === 'true';
+    const allowRealValve = (this.config.get<string>('VALVE_ALLOW_REAL_CONTROL') ?? 'false').toLowerCase() === 'true';
+    const autoExecution = (this.config.get<string>('ENABLE_AUTO_EXECUTION') ?? 'false').toLowerCase() === 'true';
+    return mode === 'MOCK' || dryRun || !allowRealValve || !autoExecution;
   }
 
   private dispatch(controller: any, deviceId: string, command: string, payload: Record<string, unknown>) {

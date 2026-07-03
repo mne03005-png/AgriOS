@@ -1,11 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RequestContextService } from '../../common/request-context.service';
 import { OperationLogService } from '../operation-log/operation-log.service';
 
 type CreateDeadLetterInput = {
   eventType: string;
   deviceName?: string;
   thingsboardDeviceId?: string;
+  eventId?: string;
+  originalSource?: string;
   rawPayload?: unknown;
   errorMessage: string;
   errorStack?: string;
@@ -15,13 +18,16 @@ type CreateDeadLetterInput = {
 export class IotWebhookDeadLetterService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly operationLogService: OperationLogService
+    private readonly operationLogService: OperationLogService,
+    private readonly requestContext: RequestContextService
   ) {}
 
   create(input: CreateDeadLetterInput) {
     return (this.prisma as any).ioTWebhookDeadLetter.create({
       data: {
         source: 'thingsboard',
+        originalSource: input.originalSource,
+        eventId: input.eventId,
         eventType: input.eventType,
         deviceName: input.deviceName,
         thingsboardDeviceId: input.thingsboardDeviceId,
@@ -62,7 +68,13 @@ export class IotWebhookDeadLetterService {
       }),
       (this.prisma as any).ioTWebhookDeadLetter.count({ where })
     ]);
-    return { total, page, pageSize, items };
+    return { total, page, pageSize, items: items.map((item: any) => this.sanitizeRaw(item)) };
+  }
+
+  async findOne(id: string) {
+    const deadLetter = await (this.prisma as any).ioTWebhookDeadLetter.findUnique({ where: { id } });
+    if (!deadLetter) throw new NotFoundException('Webhook dead letter not found');
+    return this.sanitizeRaw(deadLetter);
   }
 
   async markResolved(id: string, remark?: string) {
@@ -268,5 +280,16 @@ export class IotWebhookDeadLetterService {
   private positiveInt(value: unknown, fallback: number) {
     const number = Number(value);
     return Number.isInteger(number) && number > 0 ? number : fallback;
+  }
+
+  private sanitizeRaw(item: any) {
+    if (!item || this.canViewRawPayload()) return item;
+    const { rawPayload: _rawPayload, errorStack: _errorStack, ...rest } = item;
+    return rest;
+  }
+
+  private canViewRawPayload() {
+    const role = this.requestContext.getRole();
+    return role === 'PLATFORM_ADMIN' || role === 'TENANT_ADMIN';
   }
 }

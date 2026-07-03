@@ -1,8 +1,10 @@
+import { createHmac } from 'node:crypto';
+
 type Scenario = 'normal' | 'dry' | 'low-pressure' | 'no-flow';
 
 const apiBaseUrl = process.env.AGRIOS_API_URL ?? 'http://localhost:3000/api/v1';
 const webhookPath = process.env.AGRIOS_WEBHOOK_PATH ?? '/iot/thingsboard/telemetry';
-const webhookSecret = process.env.THINGSBOARD_WEBHOOK_SECRET ?? 'agrios_tb_secret';
+const webhookSecret = process.env.THINGSBOARD_WEBHOOK_SECRET;
 const deviceName = process.env.DEVICE_NAME ?? 'demo-soil-sensor-a';
 const thingsboardDeviceId = process.env.THINGSBOARD_DEVICE_ID ?? 'tb-demo-soil-a';
 const scenario = (process.env.SCENARIO ?? 'normal') as Scenario;
@@ -44,13 +46,19 @@ function buildPayload() {
 }
 
 async function main() {
+  if (!webhookSecret) throw new Error('THINGSBOARD_WEBHOOK_SECRET is required');
   const target = `${apiBaseUrl}${webhookPath}`;
   const payload = buildPayload();
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const signature = `sha256=${createHmac('sha256', process.env.THINGSBOARD_WEBHOOK_HMAC_SECRET ?? webhookSecret).update(`${timestamp}.${JSON.stringify(payload)}`).digest('hex')}`;
   const response = await fetch(target, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-thingsboard-secret': webhookSecret
+      'x-thingsboard-secret': webhookSecret,
+      'x-agrios-timestamp': timestamp,
+      'x-agrios-signature': signature,
+      'x-agrios-event-id': `sim-${Date.now()}`
     },
     body: JSON.stringify(payload)
   });
@@ -64,4 +72,3 @@ void main().catch((error) => {
   console.error(`[P13 ThingsBoard simulator] failed: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 });
-

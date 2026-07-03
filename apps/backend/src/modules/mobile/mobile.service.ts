@@ -66,7 +66,7 @@ export class MobileService {
       latestActivities,
       droneOperations,
       miniMapLayers: mapLayers,
-      quickActions: { emergencyStop: true, manualValve: true, autoMode: false, alerts: true }
+      quickActions: { emergencyStop: false, manualValve: false, autoMode: false, alerts: true, readOnlyReason: 'READ_ONLY_MODE' }
     };
   }
 
@@ -259,7 +259,7 @@ export class MobileService {
   async emergencyStop(body: { farmId?: string; fieldId?: string }, user: MobileUser) {
     const farmId = await this.resolveFarmId(body.farmId, user);
     if (body.fieldId) await this.assertFieldInTenant(body.fieldId, user, farmId);
-    return this.safetyService.emergencyStop({ ...body, farmId, enabled: true });
+    return { ok: false, code: 'READ_ONLY_MODE', reason: 'Mobile device control is disabled.', farmId };
   }
 
   async valve(body: { deviceId: string; command: 'VALVE_OPEN' | 'VALVE_CLOSE'; remark?: string }, user: MobileUser) {

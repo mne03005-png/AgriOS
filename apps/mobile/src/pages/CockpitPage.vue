@@ -25,7 +25,7 @@
     <MiniFarmMap :layers="data.miniMapLayers ?? []" :risk-level="data.todayRiskLevel" />
     <FarmActivityTimeline :activities="data.latestActivities ?? []" />
     <AIRecommendationCard :decision="data.latestDecision" :plans="data.latestActionPlans ?? []" />
-    <QuickActions @emergency-stop="onEmergencyStop" @valve="onValve" />
+    <QuickActions />
     <section v-if="!demoReady" class="panel">
       <div class="panel-title">Demo data not ready</div>
       <p class="warning-text">请先在 apps/backend 执行 npx prisma db seed，然后刷新 Cockpit。</p>

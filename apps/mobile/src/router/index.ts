@@ -20,6 +20,7 @@ import EdgeGatewayPage from '../pages/EdgeGatewayPage.vue';
 import BluetoothMaintenancePage from '../pages/BluetoothMaintenancePage.vue';
 import DeviceIntegrationPage from '../pages/DeviceIntegrationPage.vue';
 import ValveControlTestPage from '../pages/ValveControlTestPage.vue';
+import ReadOnlyTelemetryPage from '../pages/ReadOnlyTelemetryPage.vue';
 
 function normalizeBase(base: string) {
   return base.endsWith('/') ? base : `${base}/`;
@@ -56,6 +57,7 @@ export const router = createRouter({
     { path: '/edge-gateways', component: EdgeGatewayPage },
     { path: '/bluetooth-maintenance', component: BluetoothMaintenancePage },
     { path: '/device-integration', component: DeviceIntegrationPage },
+    { path: '/devices', component: ReadOnlyTelemetryPage },
     { path: '/valve-control-test', component: ValveControlTestPage },
     { path: '/showcase', component: ShowcasePage },
     { path: '/fields/:fieldId', component: FieldDetailPage, props: true },
