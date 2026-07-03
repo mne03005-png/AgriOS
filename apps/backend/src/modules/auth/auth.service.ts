@@ -2,8 +2,8 @@ import { BadRequestException, ForbiddenException, Injectable, UnauthorizedExcept
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma/prisma.service';
-import { RequestContextService } from '../../common/request-context.service';
 import { AuditService } from '../audit/audit.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 
@@ -16,15 +16,19 @@ type SafeUser = {
   name: string;
   role: string;
   status?: string;
+  tokenVersion?: number;
   farm?: unknown;
 };
+
+const authFailureMessage = 'Account or password is incorrect';
+const maxFailedLoginCount = 5;
+const lockMinutes = 15;
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
-    private readonly requestContext: RequestContextService,
     private readonly audit: AuditService
   ) {}
 
@@ -33,7 +37,7 @@ export class AuthService {
     const publicRegistrationEnabled = process.env.ENABLE_PUBLIC_REGISTRATION === 'true';
 
     if (isProduction && !publicRegistrationEnabled) {
-      throw new ForbiddenException('生产环境已关闭公开注册');
+      throw new ForbiddenException('Public registration is disabled in production');
     }
 
     const allowedSelfServiceRoles = new Set<string>([
@@ -45,17 +49,17 @@ export class AuthService {
     ]);
 
     if (!allowedSelfServiceRoles.has(dto.role)) {
-      throw new ForbiddenException('公开注册不允许创建管理角色');
+      throw new ForbiddenException('Public registration cannot create administrative roles');
     }
 
     if (dto.tenantId || dto.farmId) {
-      throw new ForbiddenException('公开注册不允许指定租户或农场');
+      throw new ForbiddenException('Public registration cannot assign tenant or farm');
     }
 
     const identity = this.normalizeIdentity(dto.phone, dto.email);
     const exists = await this.findByIdentity(identity);
     if (exists) {
-      throw new BadRequestException('账号已存在');
+      throw new BadRequestException('Account already exists');
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
@@ -81,28 +85,79 @@ export class AuthService {
     const user = await this.findByIdentity(identity);
     if (!user || !user.passwordHash || user.status === 'DISABLED') {
       await this.audit.record({ eventType: 'auth.login.failed', severity: 'WARNING', payload: { phone: identity.phone, email: identity.email } });
-      throw new UnauthorizedException('账号或密码错误');
+      throw new UnauthorizedException(authFailureMessage);
+    }
+
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      await this.audit.record({ eventType: 'auth.login.failed', severity: 'WARNING', userId: user.id, tenantId: user.tenantId, payload: { reason: 'locked' } });
+      throw new UnauthorizedException(authFailureMessage);
     }
 
     const ok = await bcrypt.compare(dto.password, user.passwordHash);
     if (!ok) {
+      const failedLoginCount = (user.failedLoginCount ?? 0) + 1;
+      const lockedUntil = failedLoginCount >= maxFailedLoginCount ? new Date(Date.now() + lockMinutes * 60 * 1000) : null;
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginCount, lockedUntil }
+      });
       await this.audit.record({ eventType: 'auth.login.failed', severity: 'WARNING', userId: user.id, tenantId: user.tenantId, payload: { reason: 'bad_password' } });
-      throw new UnauthorizedException('账号或密码错误');
+      throw new UnauthorizedException(authFailureMessage);
     }
 
     const updated = await this.prisma.user.update({
       where: { id: user.id },
-      data: { lastLoginAt: new Date() },
+      data: { lastLoginAt: new Date(), failedLoginCount: 0, lockedUntil: null },
       include: { farm: true }
     });
     await this.audit.record({ eventType: 'auth.login', severity: 'INFO', userId: updated.id, tenantId: updated.tenantId, entityType: 'User', entityId: updated.id });
     return this.buildAuthResponse(updated);
   }
 
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    if (!dto.newPassword || dto.newPassword.length < 8) {
+      throw new BadRequestException('New password must be at least 8 characters');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { farm: true } });
+    if (!user || !user.passwordHash || user.status === 'DISABLED') {
+      throw new UnauthorizedException('Authentication required');
+    }
+
+    const ok = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!ok) {
+      await this.audit.record({ eventType: 'auth.password_change.failed', severity: 'WARNING', userId: user.id, tenantId: user.tenantId, payload: { reason: 'bad_current_password' } });
+      throw new UnauthorizedException(authFailureMessage);
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 10);
+    const updated = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        passwordChangedAt: new Date(),
+        tokenVersion: { increment: 1 },
+        failedLoginCount: 0,
+        lockedUntil: null
+      },
+      include: { farm: true }
+    });
+    await this.audit.record({ eventType: 'auth.password_change', severity: 'INFO', userId: updated.id, tenantId: updated.tenantId, entityType: 'User', entityId: updated.id });
+    return this.buildAuthResponse(updated);
+  }
+
+  async logout(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, tenantId: true } });
+    if (user) {
+      await this.audit.record({ eventType: 'auth.logout', severity: 'INFO', userId: user.id, tenantId: user.tenantId, entityType: 'User', entityId: user.id });
+    }
+    return { ok: true };
+  }
+
   async profile(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, include: { farm: true } });
-    if (!user) {
-      throw new UnauthorizedException('用户不存在');
+    if (!user || user.status === 'DISABLED') {
+      throw new UnauthorizedException('User is not available');
     }
     return {
       user: this.safeUser(user),
@@ -123,7 +178,7 @@ export class AuthService {
     const normalizedEmail = email?.trim().toLowerCase();
     const normalizedPhone = phone?.trim() || normalizedEmail;
     if (!normalizedPhone) {
-      throw new BadRequestException('手机号或邮箱至少填写一个');
+      throw new BadRequestException('Phone or email is required');
     }
     return { phone: normalizedPhone, email: normalizedEmail };
   }
@@ -133,7 +188,8 @@ export class AuthService {
       userId: user.id,
       tenantId: user.tenantId ?? undefined,
       farmId: user.farmId ?? undefined,
-      role: user.role
+      role: user.role,
+      tokenVersion: user.tokenVersion ?? 0
     });
     return {
       accessToken,
@@ -142,7 +198,7 @@ export class AuthService {
   }
 
   private safeUser(user: SafeUser & { passwordHash?: string | null }) {
-    const { passwordHash: _passwordHash, ...safeUser } = user;
+    const { passwordHash: _passwordHash, tokenVersion: _tokenVersion, ...safeUser } = user;
     return safeUser;
   }
 }

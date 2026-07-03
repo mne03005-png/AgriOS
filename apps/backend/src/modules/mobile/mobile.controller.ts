@@ -1,54 +1,63 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { Permissions } from '../../common/permissions/permissions.decorator';
+import { PERMISSIONS } from '../../common/permissions/permission.constants';
+import { PermissionsGuard } from '../../common/permissions/permissions.guard';
+import { TenantGuard } from '../../common/tenant/tenant.guard';
+import { AuthenticatedRequest, JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { MobileService } from './mobile.service';
 
 @ApiTags('P11 Mobile Cockpit')
 @Controller('mobile')
+@UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+@Permissions(PERMISSIONS.MOBILE_READ)
 export class MobileController {
   constructor(private readonly mobileService: MobileService) {}
 
   @Get('cockpit')
-  cockpit(@Query('farmId') farmId: string) {
-    return this.mobileService.cockpit(farmId);
+  cockpit(@Req() req: AuthenticatedRequest, @Query('farmId') farmId: string) {
+    return this.mobileService.cockpit(farmId, req.user!);
   }
 
   @Get('map')
-  map(@Query('farmId') farmId: string) {
-    return this.mobileService.map(farmId);
+  map(@Req() req: AuthenticatedRequest, @Query('farmId') farmId: string) {
+    return this.mobileService.map(farmId, req.user!);
   }
 
   @Get('fields/:fieldId/detail')
-  fieldDetail(@Param('fieldId') fieldId: string) {
-    return this.mobileService.fieldDetail(fieldId);
+  fieldDetail(@Req() req: AuthenticatedRequest, @Param('fieldId') fieldId: string) {
+    return this.mobileService.fieldDetail(fieldId, req.user!);
   }
 
   @Get('ai/recommendations')
-  aiRecommendations(@Query('farmId') farmId: string) {
-    return this.mobileService.aiRecommendations(farmId);
+  aiRecommendations(@Req() req: AuthenticatedRequest, @Query('farmId') farmId: string) {
+    return this.mobileService.aiRecommendations(farmId, req.user!);
   }
 
   @Get('operations')
-  operations(@Query('farmId') farmId: string) {
-    return this.mobileService.operations(farmId);
+  operations(@Req() req: AuthenticatedRequest, @Query('farmId') farmId: string) {
+    return this.mobileService.operations(farmId, req.user!);
   }
 
   @Post('control/emergency-stop')
-  emergencyStop(@Body() body: { farmId?: string; fieldId?: string }) {
-    return this.mobileService.emergencyStop(body);
+  @Permissions(PERMISSIONS.IRRIGATION_EXECUTE)
+  emergencyStop(@Req() req: AuthenticatedRequest, @Body() body: { farmId?: string; fieldId?: string }) {
+    return this.mobileService.emergencyStop(body, req.user!);
   }
 
   @Post('control/valve')
-  valve(@Body() body: { deviceId: string; command: 'VALVE_OPEN' | 'VALVE_CLOSE'; remark?: string }) {
-    return this.mobileService.valve(body);
+  @Permissions(PERMISSIONS.IRRIGATION_EXECUTE)
+  valve(@Req() req: AuthenticatedRequest, @Body() body: { deviceId: string; command: 'VALVE_OPEN' | 'VALVE_CLOSE'; remark?: string }) {
+    return this.mobileService.valve(body, req.user!);
   }
 
   @Get('alerts')
-  alerts(@Query('farmId') farmId: string) {
-    return this.mobileService.alerts(farmId);
+  alerts(@Req() req: AuthenticatedRequest, @Query('farmId') farmId: string) {
+    return this.mobileService.alerts(farmId, req.user!);
   }
 
   @Get('reports/summary')
-  reports(@Query('farmId') farmId: string) {
-    return this.mobileService.reportsSummary(farmId);
+  reports(@Req() req: AuthenticatedRequest, @Query('farmId') farmId: string) {
+    return this.mobileService.reportsSummary(farmId, req.user!);
   }
 }

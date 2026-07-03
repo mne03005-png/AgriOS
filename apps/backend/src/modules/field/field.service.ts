@@ -17,7 +17,9 @@ export class FieldService {
 
   async create(dto: CreateFieldDto) {
     const farmId = this.requestContextService.isPlatformAdmin() ? dto.farmId : this.requestContextService.getFarmId() ?? dto.farmId;
-    const field = await this.prisma.field.create({ data: { ...dto, farmId } });
+    await this.assertCanAccessFarmRecord(farmId);
+    const tenantId = this.requestContextService.isPlatformAdmin() ? undefined : this.requestContextService.getTenantId();
+    const field = await this.prisma.field.create({ data: { ...dto, farmId, tenantId } });
     await this.operationLogService.create({
       action: 'CREATE_FIELD',
       targetType: 'FIELD',
@@ -31,8 +33,10 @@ export class FieldService {
   async findAll(query: ListQueryDto = {}) {
     const { page, pageSize, skip, take } = getPagination(query);
     const farmId = this.requestContextService.isPlatformAdmin() ? undefined : this.requestContextService.getFarmId();
+    const tenantId = this.requestContextService.isPlatformAdmin() ? undefined : this.requestContextService.getTenantId();
     const where = {
       ...(farmId ? { farmId } : {}),
+      ...(tenantId ? { tenantId } : {}),
       ...(query.keyword
         ? {
             OR: [
@@ -62,11 +66,13 @@ export class FieldService {
     return field;
   }
 
-  update(id: string, dto: UpdateFieldDto) {
+  async update(id: string, dto: UpdateFieldDto) {
+    await this.assertCanAccessField(id);
     return this.prisma.field.update({ where: { id }, data: dto });
   }
 
-  remove(id: string) {
+  async remove(id: string) {
+    await this.assertCanAccessField(id);
     return this.prisma.field.delete({ where: { id } });
   }
 
@@ -228,5 +234,26 @@ export class FieldService {
     if (!this.requestContextService.isPlatformAdmin() && currentFarmId && currentFarmId !== farmId) {
       throw new NotFoundException('Field not found');
     }
+  }
+
+  private async assertCanAccessFarmRecord(farmId: string) {
+    if (this.requestContextService.isPlatformAdmin()) return;
+    const tenantId = this.requestContextService.getTenantId();
+    const farm = await this.prisma.farm.findFirst({ where: { id: farmId, tenantId }, select: { id: true } });
+    if (!farm) throw new NotFoundException('Farm not found');
+  }
+
+  private async assertCanAccessField(id: string) {
+    const tenantId = this.requestContextService.isPlatformAdmin() ? undefined : this.requestContextService.getTenantId();
+    const farmId = this.requestContextService.isPlatformAdmin() ? undefined : this.requestContextService.getFarmId();
+    const field = await this.prisma.field.findFirst({
+      where: {
+        id,
+        ...(tenantId ? { tenantId } : {}),
+        ...(farmId ? { farmId } : {})
+      },
+      select: { id: true }
+    });
+    if (!field) throw new NotFoundException('Field not found');
   }
 }

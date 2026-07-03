@@ -1,13 +1,16 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiNotFoundResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ListQueryDto } from '../../common/dto/list-query.dto';
 import { BasicCrudController } from '../../common/basic-crud.controller';
+import { TenantGuard } from '../../common/tenant/tenant.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateFieldDto } from './dto/create-field.dto';
 import { UpdateFieldDto } from './dto/update-field.dto';
 import { FieldService } from './field.service';
 
 @ApiTags('Fields')
 @Controller('fields')
+@UseGuards(JwtAuthGuard, TenantGuard)
 export class FieldController extends BasicCrudController<CreateFieldDto, UpdateFieldDto> {
   constructor(private readonly fieldService: FieldService) {
     const service = fieldService;

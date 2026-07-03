@@ -14,18 +14,23 @@ model User {
   email     String?  @unique
   name      String
   passwordHash String?
+  tokenVersion Int     @default(0)
   role      UserRole @default(FARMER)
   status    UserStatus @default(ACTIVE)
   farmId    String?
   farm      Farm?    @relation(fields: [farmId], references: [id])
   remark    String?  @db.Text
   lastLoginAt DateTime?
+  passwordChangedAt DateTime?
+  failedLoginCount Int @default(0)
+  lockedUntil DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([farmId])
   @@index([tenantId])
   @@index([status])
+  @@index([lockedUntil])
 }
 
 model Farm {

@@ -33,6 +33,7 @@ assertContains('src/router/index.ts', router, "createWebHistory(resolveRouterBas
 assertContains('src/router/index.ts', router, "window.location.pathname.startsWith('/mobile')");
 assertContains('src/router/index.ts', router, "window.location.hostname === 'agrios.xyzwtt.com'");
 assertContains('src/router/index.ts', router, "path: '/login', component: LoginPage, meta: { public: true }");
+assertContains('src/router/index.ts', router, "path: '/change-password', component: ChangePasswordPage");
 assertContains('src/router/index.ts', router, "path: '/:pathMatch(.*)*', redirect: '/cockpit'");
 assertContains('src/router/index.ts', router, "query: { redirect: to.fullPath }");
 assertNotContains('src/router/index.ts', router, 'VITE_AUTH_TOKEN');
@@ -45,6 +46,10 @@ const login = read('src/pages/LoginPage.vue');
 assertContains('src/pages/LoginPage.vue', login, "useRoute");
 assertContains('src/pages/LoginPage.vue', login, "route.query.redirect");
 assertContains('src/pages/LoginPage.vue', login, "router.replace(redirect)");
+
+const changePassword = read('src/pages/ChangePasswordPage.vue');
+assertContains('src/pages/ChangePasswordPage.vue', changePassword, "changePassword(authStore.token");
+assertContains('src/pages/ChangePasswordPage.vue', changePassword, "authStore.setSession(result.accessToken, result.user)");
 
 const sentinelToken = 'prod-fixed-auth-token-sentinel-do-not-ship';
 const isWindows = process.platform === 'win32';

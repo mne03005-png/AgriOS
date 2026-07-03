@@ -17,7 +17,7 @@ export class TenantGuard implements CanActivate {
       throw new ForbiddenException('Unauthenticated access is limited to demo farm data');
     }
 
-    if (role === 'PLATFORM_ADMIN') {
+    if (this.isPlatformRole(role)) {
       if (requestedTenantId && requestedTenantId !== userTenantId) {
         await this.audit(request, 'cross_tenant_access', { requestedTenantId, userTenantId });
       }
@@ -29,7 +29,19 @@ export class TenantGuard implements CanActivate {
       throw new ForbiddenException('Tenant mismatch');
     }
 
+    if (farmId && userTenantId) {
+      const farm = await this.prisma.farm.findFirst({ where: { id: farmId, tenantId: userTenantId }, select: { id: true } });
+      if (!farm) {
+        await this.audit(request, 'cross_farm_denied', { farmId, userTenantId });
+        throw new ForbiddenException('Farm mismatch');
+      }
+    }
+
     return true;
+  }
+
+  private isPlatformRole(role?: string) {
+    return role === 'PLATFORM_ADMIN' || role === 'SUPER_ADMIN';
   }
 
   private first(value: unknown) {

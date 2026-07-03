@@ -2,6 +2,7 @@ import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiCreatedResponse, ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { AuthenticatedRequest, JwtAuthGuard } from './jwt-auth.guard';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 
@@ -38,5 +39,20 @@ export class AuthController {
   @Get('me')
   me(@Req() req: AuthenticatedRequest) {
     return this.authService.profile(req.user!.userId);
+  }
+
+  @ApiOkResponse({ description: 'Password changed and a fresh accessToken is returned' })
+  @ApiUnauthorizedResponse({ description: 'Current password is invalid or token is expired' })
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  changePassword(@Req() req: AuthenticatedRequest, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(req.user!.userId, dto);
+  }
+
+  @ApiOkResponse({ description: 'Logout audit event recorded' })
+  @UseGuards(JwtAuthGuard)
+  @Post('logout')
+  logout(@Req() req: AuthenticatedRequest) {
+    return this.authService.logout(req.user!.userId);
   }
 }

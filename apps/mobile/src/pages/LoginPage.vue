@@ -3,26 +3,26 @@
     <DemoHeader />
     <header class="section-header">
       <div>
-        <p class="eyebrow">P12 Auth</p>
+        <p class="eyebrow">Auth</p>
         <h1>AgriOS 登录</h1>
-        <p class="subtle">生产环境需要登录后查看农场数据；本地演示仍可使用 Demo 账号。</p>
+        <p class="subtle">生产环境必须登录后查看农场数据。</p>
       </div>
     </header>
 
     <section class="card">
       <label class="form-row">
         <span>邮箱</span>
-        <input v-model="email" placeholder="demo@agrios.local" />
+        <input v-model="email" autocomplete="username" placeholder="demo@agrios.local" />
       </label>
       <label class="form-row">
         <span>密码</span>
-        <input v-model="password" type="password" placeholder="请输入密码" />
+        <input v-model="password" autocomplete="current-password" type="password" placeholder="请输入密码" @keyup.enter="submit" />
       </label>
       <button class="primary-button" :disabled="loading" @click="submit">
         {{ loading ? '登录中...' : '登录' }}
       </button>
-      <button v-if="authStore.isLoggedIn" class="ghost-button" @click="logout">退出登录</button>
-      <p v-if="message" class="subtle">{{ message }}</p>
+      <button v-if="authStore.isLoggedIn" class="ghost-button" @click="logoutCurrent">退出登录</button>
+      <p v-if="message" class="warning-text">{{ message }}</p>
     </section>
   </section>
 </template>
@@ -31,7 +31,7 @@
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import DemoHeader from '../components/common/DemoHeader.vue';
-import { login } from '../api/auth-api';
+import { login, logout } from '../api/auth-api';
 import { authStore } from '../stores/auth.store';
 
 const router = useRouter();
@@ -47,7 +47,6 @@ async function submit() {
   try {
     const result = await login({ email: email.value, password: password.value });
     authStore.setSession(result.accessToken, result.user);
-    message.value = `已登录：${result.user.name} / ${result.user.role}`;
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/profile';
     await router.replace(redirect);
   } catch (error) {
@@ -57,8 +56,10 @@ async function submit() {
   }
 }
 
-function logout() {
+async function logoutCurrent() {
+  const token = authStore.token;
   authStore.clear();
+  if (token) await logout(token);
   message.value = '已退出登录。';
 }
 </script>

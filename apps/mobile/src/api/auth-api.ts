@@ -15,15 +15,19 @@ export type AuthResponse = {
   user: AuthUser;
 };
 
+async function readJson(response: Response) {
+  const body = await response.json().catch(() => null);
+  return body?.data ?? body;
+}
+
 export async function login(input: { email?: string; phone?: string; password: string }) {
   const response = await fetch(`${BASE_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input)
   });
-  if (!response.ok) throw new Error(`Login failed: HTTP ${response.status}`);
-  const body = await response.json();
-  return (body.data ?? body) as AuthResponse;
+  if (!response.ok) throw new Error('账号或密码错误');
+  return (await readJson(response)) as AuthResponse;
 }
 
 export async function me(token: string) {
@@ -31,6 +35,22 @@ export async function me(token: string) {
     headers: { Authorization: `Bearer ${token}` }
   });
   if (!response.ok) throw new Error(`Profile failed: HTTP ${response.status}`);
-  const body = await response.json();
-  return (body.data ?? body) as { user: AuthUser; tenant: unknown; role: string };
+  return (await readJson(response)) as { user: AuthUser; tenant: unknown; role: string };
+}
+
+export async function changePassword(token: string, input: { currentPassword: string; newPassword: string }) {
+  const response = await fetch(`${BASE_URL}/auth/change-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) throw new Error(response.status === 401 ? '当前密码不正确或登录已过期' : `Change password failed: HTTP ${response.status}`);
+  return (await readJson(response)) as AuthResponse;
+}
+
+export async function logout(token: string) {
+  await fetch(`${BASE_URL}/auth/logout`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` }
+  }).catch(() => undefined);
 }

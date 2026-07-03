@@ -3,29 +3,41 @@
     <DemoHeader />
     <header class="section-header">
       <div>
-        <p class="eyebrow">Settings</p>
+        <p class="eyebrow">Profile</p>
         <h1>我的</h1>
-        <p class="subtle">农场系统设置、登录状态与生产化入口</p>
+        <p class="subtle">账号、租户、农场和生产安全状态。</p>
       </div>
     </header>
 
-    <section class="card">
+    <section v-if="loading" class="card">
+      <p class="subtle">正在加载登录状态...</p>
+    </section>
+
+    <section v-else-if="!authStore.isLoggedIn" class="card">
+      <h2>未登录</h2>
+      <p class="subtle">请先登录后访问农场数据。</p>
+      <RouterLink class="primary-button" to="/login">去登录</RouterLink>
+    </section>
+
+    <section v-else class="card">
       <p class="eyebrow">Auth</p>
-      <h2>{{ authStore.isLoggedIn ? authStore.user?.name : 'Demo 模式' }}</h2>
-      <p class="subtle">
-        {{ authStore.isLoggedIn ? `tenantId=${authStore.user?.tenantId ?? '-'} · role=${authStore.user?.role}` : '未登录时仍默认访问 demo farm，便于演示和验收。' }}
-      </p>
-      <p class="subtle">当前控制模式：{{ health.deviceControlMode ?? 'MOCK' }} · farmId=demo</p>
-      <p class="subtle">ThingsBoard 用于设备调试，AgriOS 用于农业驾驶舱。</p>
-      <RouterLink class="primary-button" to="/login">{{ authStore.isLoggedIn ? '管理登录状态' : '登录 Demo 用户' }}</RouterLink>
+      <h2>{{ authStore.user?.name }}</h2>
+      <p class="subtle">role={{ authStore.user?.role }}</p>
+      <p class="subtle">tenantId={{ authStore.user?.tenantId ?? '-' }}</p>
+      <p class="subtle">farmId={{ authStore.user?.farmId ?? '-' }}</p>
+      <p class="subtle">当前控制模式：{{ health.deviceControlMode ?? 'MOCK' }}</p>
+      <div class="button-row">
+        <RouterLink class="primary-button" to="/change-password">修改密码</RouterLink>
+        <button class="ghost-button" @click="logoutCurrent">退出登录</button>
+      </div>
     </section>
 
-    <section v-if="!canExecute" class="panel">
+    <section v-if="authStore.isLoggedIn && !canExecute" class="panel">
       <div class="panel-title">权限提示</div>
-      <p class="warning-text">当前角色无权限执行高风险动作，请联系农场管理员。开泵、开阀、施肥必须经过 Safety / Approval / ActionQueue。</p>
+      <p class="warning-text">当前角色无权执行高风险动作。设备控制必须经过安全策略、审批和审计。</p>
     </section>
 
-    <section class="profile-list">
+    <section v-if="authStore.isLoggedIn" class="profile-list">
       <RouterLink v-for="item in visibleItems" :key="item.label" :to="item.path">{{ item.label }}</RouterLink>
     </section>
   </section>
@@ -33,11 +45,15 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import DemoHeader from '../components/common/DemoHeader.vue';
 import { getHealthReady } from '../api/production-api';
+import { logout, me } from '../api/auth-api';
 import { authStore } from '../stores/auth.store';
 
+const router = useRouter();
 const health = ref<any>({});
+const loading = ref(true);
 
 const canExecute = computed(() => {
   const role = authStore.user?.role;
@@ -51,24 +67,37 @@ const visibleItems = computed(() => {
 });
 
 onMounted(async () => {
-  const result = await getHealthReady();
-  health.value = result.data;
+  try {
+    if (authStore.token) {
+      const profile = await me(authStore.token);
+      authStore.setUser(profile.user);
+    }
+    const result = await getHealthReady();
+    health.value = result.data;
+  } catch {
+    authStore.clear();
+  } finally {
+    loading.value = false;
+  }
 });
 
+async function logoutCurrent() {
+  const token = authStore.token;
+  authStore.clear();
+  if (token) await logout(token);
+  await router.replace('/login');
+}
+
 const items = [
-  { label: '一键演示路径', path: '/showcase' },
-  { label: '进入 Demo 农场', path: '/cockpit' },
-  { label: 'Demo 状态检查', path: '/demo-status' },
+  { label: '进入农场驾驶舱', path: '/cockpit' },
+  { label: '地图', path: '/map' },
+  { label: '农事与设备', path: '/operations' },
+  { label: '告警', path: '/alerts' },
+  { label: '报表', path: '/reports' },
   { label: '无人机作业', path: '/drone-operations' },
-  { label: '无人机审核台', path: '/drone-reviews' },
-  { label: '项目报表', path: '/reports' },
+  { label: 'AI 建议', path: '/ai' },
   { label: '设备安装验收', path: '/installer-checks', installerOnly: true },
   { label: '真实设备接入调试', path: '/device-integration', installerOnly: true },
-  { label: '阀门安全测试', path: '/valve-control-test', installerOnly: true },
-  { label: 'Edge 网关状态', path: '/edge-gateways', installerOnly: true },
-  { label: '蓝牙安装维护', path: '/bluetooth-maintenance', installerOnly: true },
-  { label: '地图边界审核', path: '/boundaries/review' },
-  { label: '设备与作业', path: '/operations' },
-  { label: '安全与告警', path: '/alerts' }
+  { label: '阀门安全测试', path: '/valve-control-test', installerOnly: true }
 ];
 </script>

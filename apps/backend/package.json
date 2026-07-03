@@ -17,7 +17,8 @@
     "sim:p13:edge": "ts-node scripts/simulators/edge-controller-simulator.ts",
     "sim:p13:valve": "ts-node scripts/simulators/valve-controller-simulator.ts",
     "sim:p13:valve:failure": "node -e \"process.env.SCENARIO='failure'; require('ts-node/register'); require('./scripts/simulators/valve-controller-simulator.ts')\"",
-    "sim:p13:valve:timeout": "node -e \"process.env.SCENARIO='timeout'; require('ts-node/register'); require('./scripts/simulators/valve-controller-simulator.ts')\""
+    "sim:p13:valve:timeout": "node -e \"process.env.SCENARIO='timeout'; require('ts-node/register'); require('./scripts/simulators/valve-controller-simulator.ts')\"",
+    "test:stage2": "node scripts/verify-stage2-auth.mjs"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

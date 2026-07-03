@@ -14,6 +14,7 @@ import OperationReportDetailPage from '../pages/OperationReportDetailPage.vue';
 import DemoStatusPage from '../pages/DemoStatusPage.vue';
 import ShowcasePage from '../pages/ShowcasePage.vue';
 import LoginPage from '../pages/LoginPage.vue';
+import ChangePasswordPage from '../pages/ChangePasswordPage.vue';
 import InstallerChecksPage from '../pages/InstallerChecksPage.vue';
 import EdgeGatewayPage from '../pages/EdgeGatewayPage.vue';
 import BluetoothMaintenancePage from '../pages/BluetoothMaintenancePage.vue';
@@ -50,6 +51,7 @@ export const router = createRouter({
     { path: '/ai', component: AIPage },
     { path: '/profile', component: ProfilePage },
     { path: '/login', component: LoginPage, meta: { public: true } },
+    { path: '/change-password', component: ChangePasswordPage },
     { path: '/installer-checks', component: InstallerChecksPage },
     { path: '/edge-gateways', component: EdgeGatewayPage },
     { path: '/bluetooth-maintenance', component: BluetoothMaintenancePage },

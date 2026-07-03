@@ -1,7 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AuthenticatedRequest } from '../auth/jwt-auth.guard';
 import { SafetyService } from '../safety/safety.service';
 import { DeviceControlService } from '../device-control/device-control.service';
+
+type MobileUser = NonNullable<AuthenticatedRequest['user']>;
 
 @Injectable()
 export class MobileService {
@@ -11,8 +14,9 @@ export class MobileService {
     private readonly deviceControlService: DeviceControlService
   ) {}
 
-  async cockpit(farmId: string) {
-    const farm = await this.prisma.farm.findUnique({ where: { id: farmId }, include: { fields: true } });
+  async cockpit(farmId: string, user: MobileUser) {
+    farmId = await this.resolveFarmId(farmId, user);
+    const farm = await this.prisma.farm.findFirst({ where: { id: farmId, ...this.tenantWhere(user) }, include: { fields: true } });
     if (!farm) throw new NotFoundException('Farm not found');
     const fieldIds = farm.fields.map((field: any) => field.id);
     const [
@@ -66,7 +70,8 @@ export class MobileService {
     };
   }
 
-  async map(farmId: string) {
+  async map(farmId: string, user: MobileUser) {
+    farmId = await this.resolveFarmId(farmId, user);
     const [boundaries, layers, devices, tracks, rotationGroups, fertilizerTanks, droneOperations] = await Promise.all([
       (this.prisma as any).fieldBoundary.findMany({ where: { farmId, status: { not: 'ARCHIVED' } } }),
       (this.prisma as any).mapLayer.findMany({ where: { farmId, isVisible: true } }),
@@ -100,8 +105,8 @@ export class MobileService {
     };
   }
 
-  async fieldDetail(fieldId: string) {
-    const field = await this.prisma.field.findUnique({ where: { id: fieldId }, include: { devices: true } });
+  async fieldDetail(fieldId: string, user: MobileUser) {
+    const field = await this.prisma.field.findFirst({ where: { id: fieldId, ...this.tenantWhere(user) }, include: { devices: true } });
     if (!field) throw new NotFoundException('Field not found');
     const [boundary, season, latestMoisture, decisions, recipe, simulation, telemetrySnapshots, droneOperationRecords, droneOperationReviews, operationCosts, cropHealthObservations, yieldFactors, latestOperationReports, latestDroneSprayingReport, latestMappingLayer] = await Promise.all([
       (this.prisma as any).fieldBoundary.findFirst({ where: { fieldId, status: 'APPROVED' }, orderBy: { updatedAt: 'desc' } }),
@@ -147,12 +152,14 @@ export class MobileService {
     };
   }
 
-  async aiRecommendations(farmId: string) {
+  async aiRecommendations(farmId: string, user: MobileUser) {
+    farmId = await this.resolveFarmId(farmId, user);
     const fields = await this.prisma.field.findMany({ where: { farmId }, select: { id: true } });
     return (this.prisma as any).decisionRecord.findMany({ where: { fieldId: { in: fields.map((item) => item.id) } }, include: { actionPlans: true }, orderBy: { createdAt: 'desc' }, take: 20 });
   }
 
-  async operations(farmId: string) {
+  async operations(farmId: string, user: MobileUser) {
+    farmId = await this.resolveFarmId(farmId, user);
     const fields = await this.prisma.field.findMany({ where: { farmId }, select: { id: true } });
     const fieldIds = fields.map((item) => item.id);
     const [actionPlans, rotationRuns, fertigationTasks, dissolveTasks, pumpOperations, droneOperations] = await Promise.all([
@@ -178,7 +185,8 @@ export class MobileService {
     };
   }
 
-  async alerts(farmId: string) {
+  async alerts(farmId: string, user: MobileUser) {
+    farmId = await this.resolveFarmId(farmId, user);
     const [safetyAlerts, anomalies] = await Promise.all([
       (this.prisma as any).safetyAlert.findMany({ where: { farmId }, orderBy: { createdAt: 'desc' }, take: 50 }),
       (this.prisma as any).irrigationAnomalyEvent.findMany({ where: { farmId }, orderBy: { createdAt: 'desc' }, take: 50 })
@@ -186,7 +194,8 @@ export class MobileService {
     return { safetyAlerts, anomalies };
   }
 
-  async reportsSummary(farmId: string) {
+  async reportsSummary(farmId: string, user: MobileUser) {
+    farmId = await this.resolveFarmId(farmId, user);
     const fields = await this.prisma.field.findMany({ where: { farmId } });
     const fieldIds = fields.map((item) => item.id);
     const [deviceCount, onlineDeviceCount, executions, decisions, waterUsage, fertigationTasks, pressureAnomalies, flowAnomalies, rotationRuns, droneOperations, operationCosts, cropHealth, yieldFactors] = await Promise.all([
@@ -247,12 +256,37 @@ export class MobileService {
     };
   }
 
-  emergencyStop(body: { farmId?: string; fieldId?: string }) {
-    return this.safetyService.emergencyStop({ ...body, enabled: true });
+  async emergencyStop(body: { farmId?: string; fieldId?: string }, user: MobileUser) {
+    const farmId = await this.resolveFarmId(body.farmId, user);
+    if (body.fieldId) await this.assertFieldInTenant(body.fieldId, user, farmId);
+    return this.safetyService.emergencyStop({ ...body, farmId, enabled: true });
   }
 
-  valve(body: { deviceId: string; command: 'VALVE_OPEN' | 'VALVE_CLOSE'; remark?: string }) {
+  async valve(body: { deviceId: string; command: 'VALVE_OPEN' | 'VALVE_CLOSE'; remark?: string }, user: MobileUser) {
+    const device = await this.prisma.device.findFirst({ where: { id: body.deviceId, ...this.tenantWhere(user) }, include: { field: true } });
+    if (!device) throw new ForbiddenException('Device is outside current tenant');
+    if (user.farmId && device.field?.farmId !== user.farmId) throw new ForbiddenException('Device is outside current farm');
     return this.deviceControlService.send(body.deviceId, { command: body.command, remark: body.remark });
+  }
+
+  private tenantWhere(user: MobileUser) {
+    return user.role === 'PLATFORM_ADMIN' ? {} : { tenantId: user.tenantId };
+  }
+
+  private async resolveFarmId(requestedFarmId: string | undefined, user: MobileUser) {
+    const farmId = user.role === 'PLATFORM_ADMIN' ? requestedFarmId : user.farmId;
+    if (!farmId) throw new ForbiddenException('Farm scope is required');
+    if (requestedFarmId && user.role !== 'PLATFORM_ADMIN' && requestedFarmId !== farmId) {
+      throw new ForbiddenException('Farm mismatch');
+    }
+    const farm = await this.prisma.farm.findFirst({ where: { id: farmId, ...this.tenantWhere(user) }, select: { id: true } });
+    if (!farm) throw new ForbiddenException('Farm is outside current tenant');
+    return farmId;
+  }
+
+  private async assertFieldInTenant(fieldId: string, user: MobileUser, farmId?: string) {
+    const field = await this.prisma.field.findFirst({ where: { id: fieldId, farmId, ...this.tenantWhere(user) }, select: { id: true } });
+    if (!field) throw new ForbiddenException('Field is outside current tenant');
   }
 
   private average(values: number[]) {

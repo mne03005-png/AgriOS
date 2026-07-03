@@ -1,3 +1,5 @@
+import { authStore } from '../stores/auth.store';
+
 export type ApiResult<T> = { data: T; isMock: boolean; error?: string; path?: string; status?: number };
 
 const env = import.meta.env as Record<string, string | undefined>;
@@ -46,6 +48,14 @@ export async function request<T>(path: string, options: RequestInit = {}, fallba
     const body = await response.json();
     return { data: body.data ?? body, isMock: false };
   } catch (error) {
+    if ((error as any)?.status === 401) {
+      authStore.clear();
+      if (typeof window !== 'undefined' && !window.location.pathname.endsWith('/login')) {
+        const redirect = `${window.location.pathname}${window.location.search}`;
+        const loginPath = window.location.pathname.startsWith('/mobile') ? '/mobile/login' : '/login';
+        window.location.assign(`${loginPath}?redirect=${encodeURIComponent(redirect)}`);
+      }
+    }
     return { data: fallback, isMock: true, path, status: (error as any)?.status, error: error instanceof Error ? error.message : String(error) };
   }
 }
