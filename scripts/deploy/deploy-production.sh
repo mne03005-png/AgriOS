@@ -29,6 +29,60 @@ run() {
     "$@"
   fi
 }
+http_code() {
+  curl -k -s -o /dev/null -w '%{http_code}' "$1" || echo "000"
+}
+wait_for_http_200() {
+  local label="$1"
+  local url="$2"
+  local timeout_seconds="${3:-90}"
+  local interval_seconds="${4:-3}"
+  local elapsed=0
+  local code="000"
+
+  while (( elapsed <= timeout_seconds )); do
+    code="$(http_code "$url")"
+    log "WAIT_HTTP label=$label url=$url status=$code elapsed=${elapsed}s"
+    if [[ "$code" == "200" ]]; then
+      return 0
+    fi
+    if (( elapsed == timeout_seconds )); then
+      break
+    fi
+    sleep "$interval_seconds"
+    elapsed=$(( elapsed + interval_seconds ))
+    if (( elapsed > timeout_seconds )); then
+      elapsed="$timeout_seconds"
+    fi
+  done
+
+  fail "$label failed: url=$url last_status=$code waited=${elapsed}s"
+}
+wait_for_pm2_online() {
+  local app_name="$1"
+  local timeout_seconds="${2:-90}"
+  local interval_seconds="${3:-3}"
+  local elapsed=0
+  local status="unknown"
+
+  while (( elapsed <= timeout_seconds )); do
+    status="$(pm2 jlist 2>/dev/null | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const app=JSON.parse(d).find(x=>x.name===process.argv[1]);console.log(app?.pm2_env?.status||'missing')}catch{console.log('unknown')}})" "$app_name")"
+    log "WAIT_PM2 app=$app_name status=$status elapsed=${elapsed}s"
+    if [[ "$status" == "online" ]]; then
+      return 0
+    fi
+    if (( elapsed == timeout_seconds )); then
+      break
+    fi
+    sleep "$interval_seconds"
+    elapsed=$(( elapsed + interval_seconds ))
+    if (( elapsed > timeout_seconds )); then
+      elapsed="$timeout_seconds"
+    fi
+  done
+
+  fail "pm2 app did not become online: app=$app_name last_status=$status waited=${elapsed}s"
+}
 
 if [[ "$DRY_RUN" == false && "$SKIP_BACKUP" == true ]]; then
   echo "HIGH RISK: --skip-backup was requested for a production deployment." >&2
@@ -92,7 +146,8 @@ run npx prisma migrate status --schema prisma/schema.prisma || {
 if [[ "$DRY_RUN" == true ]]; then
   log "DRY_RUN: would inspect pending migration SQL and run prisma migrate deploy"
 else
-  if find apps/backend/prisma/migrations -name 'migration.sql' -print0 | xargs -0 grep -Ein 'DROP TABLE|DROP COLUMN|TRUNCATE|DELETE FROM|DROP DATABASE|CREATE DATABASE' >/tmp/agrios-migration-risk.txt; then
+  [[ -d prisma/migrations ]] || fail "Prisma migrations directory not found"
+  if find prisma/migrations -name 'migration.sql' -print0 | xargs -0 grep -Ein 'DROP TABLE|DROP COLUMN|TRUNCATE|DELETE FROM|DROP DATABASE|CREATE DATABASE' >/tmp/agrios-migration-risk.txt; then
     cat /tmp/agrios-migration-risk.txt >&2
     fail "potentially destructive migration SQL found"
   fi
@@ -128,21 +183,18 @@ if [[ "$DRY_RUN" == true ]]; then
 else
   sudo nginx -s reload
   pm2 startOrReload ecosystem.config.cjs --only agrios-backend --update-env
+  wait_for_pm2_online agrios-backend 90 3
   pm2 save
 fi
 
 if [[ "$DRY_RUN" == true ]]; then
   log "DRY_RUN: would run health and page checks"
 else
-  live="$(curl -k -s -o /dev/null -w '%{http_code}' "$API_BASE/health/live")"
-  ready="$(curl -k -s -o /dev/null -w '%{http_code}' "$API_BASE/health/ready")"
-  desktop="$(curl -k -s -o /dev/null -w '%{http_code}' "$DESKTOP_URL")"
-  mobile="$(curl -k -s -o /dev/null -w '%{http_code}' "$MOBILE_URL")"
-  [[ "$live" == "200" ]] || fail "health live failed: $live"
-  [[ "$ready" == "200" ]] || fail "health ready failed: $ready"
-  [[ "$desktop" == "200" ]] || fail "desktop failed: $desktop"
-  [[ "$mobile" == "200" ]] || fail "mobile failed: $mobile"
-  log "HEALTH live=$live ready=$ready desktop=$desktop mobile=$mobile"
+  wait_for_http_200 health_live "$API_BASE/health/live" 90 3
+  wait_for_http_200 health_ready "$API_BASE/health/ready" 90 3
+  wait_for_http_200 desktop "$DESKTOP_URL" 90 3
+  wait_for_http_200 mobile "$MOBILE_URL" 90 3
+  log "HEALTH live=200 ready=200 desktop=200 mobile=200"
 fi
 
 after_commit="$(git rev-parse HEAD)"
