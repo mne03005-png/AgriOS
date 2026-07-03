@@ -20,8 +20,28 @@ import BluetoothMaintenancePage from '../pages/BluetoothMaintenancePage.vue';
 import DeviceIntegrationPage from '../pages/DeviceIntegrationPage.vue';
 import ValveControlTestPage from '../pages/ValveControlTestPage.vue';
 
+function normalizeBase(base: string) {
+  return base.endsWith('/') ? base : `${base}/`;
+}
+
+function resolveRouterBase() {
+  const configuredBase = import.meta.env.VITE_ROUTER_BASE ?? import.meta.env.BASE_URL;
+  if (configuredBase && configuredBase !== '/') return normalizeBase(configuredBase);
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/mobile')) return '/mobile/';
+  return '/';
+}
+
+function isProductionMobileHost() {
+  return typeof window !== 'undefined' && window.location.hostname === 'agrios.xyzwtt.com';
+}
+
+function hasStoredToken() {
+  if (typeof localStorage === 'undefined') return false;
+  return Boolean(localStorage.getItem('agrios_access_token'));
+}
+
 export const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(resolveRouterBase()),
   routes: [
     { path: '/', redirect: '/cockpit' },
     { path: '/cockpit', component: CockpitPage },
@@ -29,7 +49,7 @@ export const router = createRouter({
     { path: '/operations', component: OperationsPage },
     { path: '/ai', component: AIPage },
     { path: '/profile', component: ProfilePage },
-    { path: '/login', component: LoginPage },
+    { path: '/login', component: LoginPage, meta: { public: true } },
     { path: '/installer-checks', component: InstallerChecksPage },
     { path: '/edge-gateways', component: EdgeGatewayPage },
     { path: '/bluetooth-maintenance', component: BluetoothMaintenancePage },
@@ -43,6 +63,12 @@ export const router = createRouter({
     { path: '/operation-reports/:id', component: OperationReportDetailPage, props: true },
     { path: '/drone-operations', component: DroneOperationsPage },
     { path: '/drone-reviews', component: DroneReviewPage },
-    { path: '/boundaries/review', component: BoundaryReviewPage }
+    { path: '/boundaries/review', component: BoundaryReviewPage },
+    { path: '/:pathMatch(.*)*', redirect: '/cockpit' }
   ]
+});
+
+router.beforeEach((to) => {
+  if (!isProductionMobileHost() || to.meta.public || hasStoredToken()) return true;
+  return { path: '/login', query: { redirect: to.fullPath } };
 });
