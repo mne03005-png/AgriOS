@@ -71,9 +71,9 @@ CREATED_DB=true
 gzip -cd "$BACKUP_FILE" | mysql --defaults-extra-file="$TMP_CNF" "$TEST_DB"
 
 for table in "${KEY_TABLES[@]}"; do
-  exists="$(mysql --defaults-extra-file="$TMP_CNF" --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$TEST_DB' AND table_name='$table'")"
+  exists="$(mysql --defaults-extra-file="$TMP_CNF" -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$TEST_DB' AND table_name='$table'")"
   [[ "$exists" == "1" ]] || fail "restored database missing key table: $table"
-  count="$(mysql --defaults-extra-file="$TMP_CNF" --batch --skip-column-names -e "SELECT COUNT(*) FROM \`$TEST_DB\`.\`$table\`")"
+  count="$(mysql --defaults-extra-file="$TMP_CNF" -N -B -e "SELECT COUNT(*) FROM \`$TEST_DB\`.\`$table\`")"
   echo "RESTORE_TABLE_${table}_ROWS=$count"
 done
 

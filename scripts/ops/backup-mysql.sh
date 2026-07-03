@@ -86,7 +86,7 @@ NODE
 # shellcheck disable=SC1090
 source "$TMP_META"
 
-mysql --defaults-extra-file="$TMP_CNF" --batch --skip-column-names -e "SELECT 1" "$DB_NAME" >/dev/null
+mysql --defaults-extra-file="$TMP_CNF" -N -B -e "SELECT 1" "$DB_NAME" >/dev/null
 
 COLSTAT=()
 if mysqldump --help 2>/dev/null | grep -q -- '--column-statistics'; then
