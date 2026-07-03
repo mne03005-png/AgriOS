@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AgriOS">
+  <rect width="64" height="64" rx="32" fill="#0B4634"/>
+  <path d="M18 43 31 14h4l13 29h-8l-2.4-6H28.3L26 43h-8Zm12.6-12h4.8L33 24.8 30.6 31Z" fill="#fff"/>
+  <path d="M14 46c10-1 19-1 36 0" stroke="#1FA6A0" stroke-width="4" stroke-linecap="round"/>
+</svg>
