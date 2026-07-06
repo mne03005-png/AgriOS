@@ -59,20 +59,21 @@ export class IotWebhookDeadLetterService {
         ...(typeof query.to === 'string' ? { lte: new Date(query.to) } : {})
       };
     }
+    const scopedWhere = this.tenantWhere(where);
     const [items, total] = await this.prisma.$transaction([
       (this.prisma as any).ioTWebhookDeadLetter.findMany({
-        where,
+        where: scopedWhere,
         skip: (page - 1) * pageSize,
         take: pageSize,
         orderBy: { createdAt: 'desc' }
       }),
-      (this.prisma as any).ioTWebhookDeadLetter.count({ where })
+      (this.prisma as any).ioTWebhookDeadLetter.count({ where: scopedWhere })
     ]);
     return { total, page, pageSize, items: items.map((item: any) => this.sanitizeRaw(item)) };
   }
 
   async findOne(id: string) {
-    const deadLetter = await (this.prisma as any).ioTWebhookDeadLetter.findUnique({ where: { id } });
+    const deadLetter = await (this.prisma as any).ioTWebhookDeadLetter.findFirst({ where: this.tenantWhere({ id }) });
     if (!deadLetter) throw new NotFoundException('Webhook dead letter not found');
     return this.sanitizeRaw(deadLetter);
   }
@@ -106,13 +107,6 @@ export class IotWebhookDeadLetterService {
 
   async diff(id: string, handler: (payload: any) => Promise<Record<string, any>>) {
     const preview = await this.preview(id, handler);
-    await this.operationLogService.create({
-      action: 'DEAD_LETTER_DIFF_VIEWED',
-      targetType: 'IoTWebhookDeadLetter',
-      targetId: id,
-      description: 'View IoT webhook dead letter replay diff',
-      metadata: { preview } as any
-    });
     return {
       deadLetterId: id,
       deviceName: preview.deviceName,
@@ -283,13 +277,15 @@ export class IotWebhookDeadLetterService {
   }
 
   private sanitizeRaw(item: any) {
-    if (!item || this.canViewRawPayload()) return item;
+    if (!item) return item;
     const { rawPayload: _rawPayload, errorStack: _errorStack, ...rest } = item;
     return rest;
   }
 
-  private canViewRawPayload() {
+  private tenantWhere<T extends Record<string, unknown>>(where: T) {
+    const tenantId = this.requestContext.getTenantId();
     const role = this.requestContext.getRole();
-    return role === 'PLATFORM_ADMIN' || role === 'TENANT_ADMIN';
+    if (!tenantId || role === 'PLATFORM_ADMIN' || role === 'SUPER_ADMIN') return where;
+    return { ...where, tenantId };
   }
 }

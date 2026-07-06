@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { OperationLogService } from '../operation-log/operation-log.service';
+import { RequestContextService } from '../../common/request-context.service';
 
 type CreateSyncAuditInput = {
+  tenantId?: string | null;
   syncType: string;
   total: number;
   created: number;
@@ -17,14 +18,17 @@ type CreateSyncAuditInput = {
 
 @Injectable()
 export class IotSyncAuditService {
+  private readonly logger = new Logger(IotSyncAuditService.name);
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly operationLogService: OperationLogService
+    private readonly requestContext: RequestContextService
   ) {}
 
   create(input: CreateSyncAuditInput) {
     return (this.prisma as any).ioTSyncAudit.create({
       data: {
+        tenantId: input.tenantId ?? this.requestContext.getTenantId(),
         source: 'thingsboard',
         syncType: input.syncType,
         total: input.total,
@@ -51,50 +55,54 @@ export class IotSyncAuditService {
         ...(typeof query.to === 'string' ? { lte: new Date(query.to) } : {})
       };
     }
+    const scopedWhere = this.tenantWhere(where);
     const [items, total] = await this.prisma.$transaction([
       (this.prisma as any).ioTSyncAudit.findMany({
-        where,
+        where: scopedWhere,
         skip: (page - 1) * pageSize,
         take: pageSize,
         orderBy: { createdAt: 'desc' }
       }),
-      (this.prisma as any).ioTSyncAudit.count({ where })
+      (this.prisma as any).ioTSyncAudit.count({ where: scopedWhere })
     ]);
-    return { total, page, pageSize, items };
+    return { total, page, pageSize, items: items.map((item: any) => this.sanitizeAudit(item, this.canIncludeRaw(query.includeRaw))) };
   }
 
-  async findOne(id: string) {
-    const audit = await (this.prisma as any).ioTSyncAudit.findUnique({ where: { id } });
+  async findOne(id: string, includeRaw = false) {
+    const audit = await (this.prisma as any).ioTSyncAudit.findFirst({ where: this.tenantWhere({ id }) });
     if (!audit) throw new NotFoundException('IoT sync audit not found');
-    return audit;
+    return this.sanitizeAudit(audit, this.canIncludeRaw(includeRaw));
   }
 
-  async exportOne(id: string, format = 'json') {
-    const audit = await this.findOne(id);
+  async exportOne(id: string, format = 'json', includeRaw = false) {
+    const audit = await (this.prisma as any).ioTSyncAudit.findFirst({ where: this.tenantWhere({ id }) });
+    if (!audit) throw new NotFoundException('IoT sync audit not found');
+    const sanitized = this.sanitizeAudit(audit, this.canIncludeRaw(includeRaw));
     const result = {
       format: format === 'json' ? 'json' : 'json',
       audit: {
-        id: audit.id,
-        source: audit.source,
-        syncType: audit.syncType,
-        total: audit.total,
-        created: audit.created,
-        updated: audit.updated,
-        bound: audit.bound,
-        unbound: audit.unbound,
-        startedAt: audit.startedAt,
-        finishedAt: audit.finishedAt,
-        createdAt: audit.createdAt
+        id: sanitized.id,
+        tenantId: sanitized.tenantId,
+        source: sanitized.source,
+        syncType: sanitized.syncType,
+        total: sanitized.total,
+        created: sanitized.created,
+        updated: sanitized.updated,
+        bound: sanitized.bound,
+        unbound: sanitized.unbound,
+        startedAt: sanitized.startedAt,
+        finishedAt: sanitized.finishedAt,
+        createdAt: sanitized.createdAt
       },
-      warnings: audit.warnings ?? [],
-      rawResult: audit.rawResult ?? {}
+      warnings: sanitized.warnings ?? [],
+      ...(sanitized.rawResult ? { rawResult: sanitized.rawResult } : {})
     };
-    await this.operationLogService.create({
-      action: 'SYNC_AUDIT_EXPORTED',
-      targetType: 'IoTSyncAudit',
-      targetId: id,
-      description: 'Export IoT sync audit as JSON',
-      metadata: { format: result.format } as any
+    this.logger.log({
+      event: 'iot.sync_audit.exported',
+      auditId: id,
+      tenantId: audit.tenantId ?? this.requestContext.getTenantId(),
+      userId: this.requestContext.getUserId(),
+      exportedAt: new Date().toISOString()
     });
     return result;
   }
@@ -102,5 +110,55 @@ export class IotSyncAuditService {
   private positiveInt(value: unknown, fallback: number) {
     const number = Number(value);
     return Number.isInteger(number) && number > 0 ? number : fallback;
+  }
+
+  private tenantWhere<T extends Record<string, unknown>>(where: T) {
+    const tenantId = this.requestContext.getTenantId();
+    const role = this.requestContext.getRole();
+    if (!tenantId || role === 'PLATFORM_ADMIN' || role === 'SUPER_ADMIN') return where;
+    return { ...where, tenantId };
+  }
+
+  private canIncludeRaw(value: unknown) {
+    const role = this.requestContext.getRole();
+    const requested = value === true || value === 'true';
+    return requested && (role === 'PLATFORM_ADMIN' || role === 'SUPER_ADMIN');
+  }
+
+  private sanitizeAudit(audit: any, includeRaw: boolean) {
+    if (!audit) return audit;
+    const { rawResult: _rawResult, ...rest } = audit;
+    return {
+      ...rest,
+      ...(includeRaw ? { rawResult: this.sanitizeSensitiveKeys(_rawResult) } : {})
+    };
+  }
+
+  private sanitizeSensitiveKeys(value: any): any {
+    if (Array.isArray(value)) return value.map((item) => this.sanitizeSensitiveKeys(item));
+    if (!value || typeof value !== 'object') return value;
+    if (value instanceof Date) return value;
+    const blocked = new Set([
+      'rawPayload',
+      'rawRequest',
+      'rawResponse',
+      'requestHeaders',
+      'authorization',
+      'accessToken',
+      'deviceToken',
+      'resultPayload',
+      'stack',
+      'thingsboardAccessToken',
+      'mqttPassword',
+      'password',
+      'secret',
+      'apiKey',
+      'privateKey'
+    ]);
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => !blocked.has(key))
+        .map(([key, item]) => [key, this.sanitizeSensitiveKeys(item)])
+    );
   }
 }

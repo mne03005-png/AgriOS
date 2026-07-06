@@ -70,16 +70,16 @@ export class IotController {
   @ApiNotFoundResponse({ description: 'Sync audit not found' })
   @Get('thingsboard/sync-audits/:id/export')
   @UseGuards(JwtAuthGuard, TenantGuard)
-  exportSyncAudit(@Param('id') id: string, @Query('format') format?: string) {
-    return this.syncAuditService.exportOne(id, format ?? 'json');
+  exportSyncAudit(@Param('id') id: string, @Query('format') format?: string, @Query('includeRaw') includeRaw?: string) {
+    return this.syncAuditService.exportOne(id, format ?? 'json', includeRaw === 'true');
   }
 
   @ApiOkResponse({ description: 'Query ThingsBoard sync audit detail' })
   @ApiNotFoundResponse({ description: 'Sync audit not found' })
   @Get('thingsboard/sync-audits/:id')
   @UseGuards(JwtAuthGuard, TenantGuard)
-  findSyncAudit(@Param('id') id: string) {
-    return this.syncAuditService.findOne(id);
+  findSyncAudit(@Param('id') id: string, @Query('includeRaw') includeRaw?: string) {
+    return this.syncAuditService.findOne(id, includeRaw === 'true');
   }
 
   @ApiOkResponse({ description: 'Query IoT webhook dead letters' })

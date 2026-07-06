@@ -259,7 +259,7 @@ export class ThingsBoardWebhookService {
           warning: plotId ? undefined : 'Device is not bound to a field; advice was not generated.'
         }
       });
-      await this.syncAuditServiceSafe(dto, normalized, Boolean(sensorRecord), Boolean(telemetrySnapshot), [...normalized.warnings, ...quality.warnings]);
+      await this.syncAuditServiceSafe(dto, normalized, Boolean(sensorRecord), Boolean(telemetrySnapshot), [...normalized.warnings, ...quality.warnings], device?.tenantId);
 
       let irrigationAdvice: any = null;
       let adviceWarning: string | null = null;
@@ -529,10 +529,12 @@ export class ThingsBoardWebhookService {
     normalized: NormalizedTelemetry,
     sensorRecordCreated: boolean,
     snapshotUpdated: boolean,
-    warnings: string[]
+    warnings: string[],
+    tenantId?: string | null
   ) {
     return this.iotDeviceService
       .recordTelemetryAudit({
+        tenantId,
         payload,
         deviceName: normalized.deviceName,
         thingsboardDeviceId: normalized.thingsboardDeviceId,
