@@ -8,6 +8,10 @@ require('ts-node/register');
 const { IotTelemetryNormalizerService } = require('../src/modules/iot/iot-telemetry-normalizer.service.ts');
 const { ThingsBoardWebhookService } = require('../src/modules/iot/thingsboard-webhook.service.ts');
 const { DeviceControlService } = require('../src/modules/device-control/device-control.service.ts');
+const { IotDeviceService } = require('../src/modules/iot/iot-device.service.ts');
+const { IotWebhookDeadLetterService } = require('../src/modules/iot/iot-webhook-dead-letter.service.ts');
+const { IotSyncAuditService } = require('../src/modules/iot/iot-sync-audit.service.ts');
+const { MqttService } = require('../src/modules/mqtt/mqtt.service.ts');
 
 const context = { getTenantId: () => 'tenant-a', getRole: () => 'TENANT_ADMIN', isPlatformAdmin: () => false, getUserId: () => 'user-a', getRequestId: () => 'req-a' };
 const prisma = {
@@ -137,5 +141,164 @@ assert.equal(mqttCalls, 0);
 assert.equal(rpcCalls, 0);
 assert.equal(httpCalls, 0);
 
+const forbiddenKeys = new Set(['thingsboardAccessToken', 'accessToken', 'deviceToken', 'mqttPassword', 'password', 'secret', 'apiKey', 'privateKey', 'authorization']);
+function assertNoForbiddenKeys(value, label) {
+  const stack = [value];
+  while (stack.length) {
+    const item = stack.pop();
+    if (!item || typeof item !== 'object') continue;
+    for (const [key, next] of Object.entries(item)) {
+      assert.equal(forbiddenKeys.has(key), false, `${label} exposed forbidden key ${key}`);
+      stack.push(next);
+    }
+  }
+}
+
+const rawDevice = {
+  id: 'device-1',
+  tenantId: 'tenant-a',
+  fieldId: 'field-a',
+  code: 'soil-1',
+  name: 'soil-1',
+  type: 'SOIL_SENSOR',
+  thingsboardDeviceId: 'tb-1',
+  thingsboardAccessToken: 'must-not-leak',
+  iotStatus: 'BOUND',
+  bindingSource: 'MANUAL',
+  mqttTopic: 'topic',
+  online: true,
+  currentStatus: { nested: { secret: 'must-not-leak', authorization: 'must-not-leak', ok: true } },
+  lastReportedAt: new Date(),
+  lastTelemetryAt: new Date(),
+  remark: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  field: { id: 'field-a', tenantId: 'tenant-a', farmId: 'farm-a', name: 'field-a', apiKey: 'must-not-leak' }
+};
+const iotPrisma = {
+  $transaction: async (ops) => Promise.all(ops),
+  device: {
+    findMany: async ({ where, select }) => {
+      assert.equal(where.tenantId, 'tenant-a');
+      assert.equal(select.thingsboardAccessToken, undefined);
+      return [rawDevice];
+    },
+    count: async ({ where }) => {
+      assert.equal(where.tenantId, 'tenant-a');
+      return 1;
+    },
+    findFirst: async ({ where, select }) => {
+      assert.equal(where.tenantId, 'tenant-a');
+      assert.equal(select.thingsboardAccessToken, undefined);
+      return rawDevice;
+    }
+  },
+  field: { findMany: async () => [] }
+};
+const iotDeviceService = new IotDeviceService(
+  iotPrisma,
+  {},
+  { create: async () => ({}) },
+  { create: async () => ({}) },
+  context
+);
+const deviceList = await iotDeviceService.findAll({ pageSize: 5 });
+assertNoForbiddenKeys(deviceList, 'findAll');
+const deviceDetail = await iotDeviceService.findOne('device-1');
+assertNoForbiddenKeys(deviceDetail, 'findOne');
+const deviceHealth = await iotDeviceService.getHealth('device-1');
+assertNoForbiddenKeys(deviceHealth, 'getHealth');
+
+let deadLetterFindManyWhere;
+let deadLetterFindOneWhere;
+const deadLetterServiceForRead = new IotWebhookDeadLetterService(
+  {
+    $transaction: async (ops) => Promise.all(ops),
+    ioTWebhookDeadLetter: {
+      findMany: async ({ where }) => {
+        deadLetterFindManyWhere = where;
+        return [{ id: 'dead-1', tenantId: 'tenant-a', rawPayload: { password: 'must-not-leak' }, errorStack: 'stack' }];
+      },
+      count: async ({ where }) => {
+        assert.equal(where.tenantId, 'tenant-a');
+        return 1;
+      },
+      findFirst: async ({ where }) => {
+        deadLetterFindOneWhere = where;
+        return { id: 'dead-1', tenantId: 'tenant-a', rawPayload: { password: 'must-not-leak' }, errorStack: 'stack' };
+      }
+    }
+  },
+  { create: async () => assert.fail('GET dead-letter reads must not write operation logs') },
+  context
+);
+assertNoForbiddenKeys(await deadLetterServiceForRead.findAll({}), 'deadLetter.findAll');
+assertNoForbiddenKeys(await deadLetterServiceForRead.findOne('dead-1'), 'deadLetter.findOne');
+assert.equal(deadLetterFindManyWhere.tenantId, 'tenant-a');
+assert.equal(deadLetterFindOneWhere.tenantId, 'tenant-a');
+
+let syncAuditWriteCalls = 0;
+let syncAuditFindManyWhere;
+let syncAuditFindOneWhere;
+const syncAuditPrisma = {
+  $transaction: async (ops) => Promise.all(ops),
+  ioTSyncAudit: {
+    findMany: async ({ where }) => {
+      syncAuditFindManyWhere = where;
+      return [{ id: 'audit-1', tenantId: 'tenant-a', rawResult: { rawPayload: { secret: 'must-not-leak' } }, warnings: [] }];
+    },
+    count: async ({ where }) => {
+      assert.equal(where.tenantId, 'tenant-a');
+      return 1;
+    },
+    findFirst: async ({ where }) => {
+      syncAuditFindOneWhere = where;
+      return { id: 'audit-1', tenantId: 'tenant-a', source: 'thingsboard', syncType: 'devices', total: 1, created: 0, updated: 0, bound: 0, unbound: 0, startedAt: new Date(), finishedAt: new Date(), createdAt: new Date(), warnings: [], rawResult: { authorization: 'must-not-leak' } };
+    },
+    create: async () => {
+      syncAuditWriteCalls += 1;
+    },
+    update: async () => {
+      syncAuditWriteCalls += 1;
+    },
+    delete: async () => {
+      syncAuditWriteCalls += 1;
+    }
+  }
+};
+const syncAuditService = new IotSyncAuditService(syncAuditPrisma, context);
+assertNoForbiddenKeys(await syncAuditService.findAll({}), 'syncAudit.findAll');
+assertNoForbiddenKeys(await syncAuditService.findOne('audit-1'), 'syncAudit.findOne');
+assertNoForbiddenKeys(await syncAuditService.exportOne('audit-1'), 'syncAudit.exportOne');
+assert.equal(syncAuditFindManyWhere.tenantId, 'tenant-a');
+assert.equal(syncAuditFindOneWhere.tenantId, 'tenant-a');
+assert.equal(syncAuditWriteCalls, 0);
+
+let connectCalls = 0;
+let publishCalls = 0;
+const originalConnect = MqttService.connectFactory;
+MqttService.connectFactory = () => {
+  connectCalls += 1;
+  return {
+    on: () => undefined,
+    subscribe: () => undefined,
+    publish: () => {
+      publishCalls += 1;
+    },
+    end: () => undefined
+  };
+};
+try {
+  new MqttService({ get: (key) => ({ DEVICE_CONTROL_MODE: 'MOCK', DEVICE_CONTROL_DRY_RUN: 'true', MQTT_BROKER_URL: 'mqtt://127.0.0.1:1884' })[key] }, {}, {}).onModuleInit();
+  assert.equal(connectCalls, 0);
+  new MqttService({ get: (key) => ({ DEVICE_CONTROL_MODE: 'MQTT_DIRECT', DEVICE_CONTROL_DRY_RUN: 'true', MQTT_BROKER_URL: 'mqtt://127.0.0.1:1884' })[key] }, {}, {}).onModuleInit();
+  assert.equal(connectCalls, 0);
+  new MqttService({ get: (key) => ({ DEVICE_CONTROL_MODE: 'MQTT_DIRECT', DEVICE_CONTROL_DRY_RUN: 'false', MQTT_BROKER_URL: 'mqtt://127.0.0.1:1884' })[key] }, {}, {}).onModuleInit();
+  assert.equal(connectCalls, 1);
+  assert.equal(publishCalls, 0);
+} finally {
+  MqttService.connectFactory = originalConnect;
+}
+
 console.log('Stage 4 read-only IoT checks passed.');
-console.log(JSON.stringify({ savedTelemetry, deadLetters, mqttCalls, rpcCalls, httpCalls }, null, 2));
+console.log(JSON.stringify({ savedTelemetry, deadLetters, mqttCalls, rpcCalls, httpCalls, connectCalls, publishCalls, syncAuditWriteCalls }, null, 2));
