@@ -319,28 +319,28 @@ const farmTelemetryPrisma = {
           farmId: 'farm-a',
           fieldId: 'field-a',
           deviceId: 'device-1',
-          pressureKpa: 120,
-          flowRateM3h: null,
-          rawPayload: { secret: 'must-not-leak' },
-          device: { thingsboardAccessToken: 'must-not-leak' },
-          reportedAt: new Date(),
-          qualityStatus: 'GOOD',
-          qualityScore: 100
-        },
-        {
-          id: 'snapshot-flow',
+        pressureKpa: 120,
+        flowRateM3h: null,
+        rawPayload: { secret: 'must-not-leak' },
+        device: { thingsboardAccessToken: 'must-not-leak' },
+        reportedAt: new Date(),
+        qualityStatus: 'UNKNOWN',
+        qualityScore: null
+      },
+      {
+        id: 'snapshot-flow',
           tenantId: 'tenant-a',
           farmId: 'farm-a',
           fieldId: 'field-a',
           deviceId: 'device-2',
           pressureKpa: null,
           flowRateM3h: 7.2,
-          rawPayload: { accessToken: 'must-not-leak' },
-          latest: { device: { thingsboardAccessToken: 'must-not-leak' } },
-          reportedAt: new Date(),
-          qualityStatus: 'GOOD',
-          qualityScore: 100
-        }
+        rawPayload: { accessToken: 'must-not-leak' },
+        latest: { device: { thingsboardAccessToken: 'must-not-leak' } },
+        reportedAt: new Date(),
+        qualityStatus: 'UNKNOWN',
+        qualityScore: null
+      }
       ];
     }
   },
@@ -358,6 +358,8 @@ const farmTelemetryPrisma = {
         value: 31,
         rawPayload: { deviceToken: 'must-not-leak' },
         reportedAt: new Date(),
+        qualityStatus: 'UNKNOWN',
+        qualityScore: null,
         device: {
           id: 'device-1',
           name: 'sensor',
@@ -379,6 +381,10 @@ assertNoForbiddenKeys(latestFarmTelemetry, 'latestForFarm');
 const farmSummary = await farmTelemetryService.farmSummary('farm-a');
 assert.equal(farmSummarySnapshotSelect.rawPayload, undefined);
 assertNoForbiddenKeys(farmSummary, 'farmSummary');
+assert.equal(latestFarmTelemetry.sensorRecord.qualityStatus, 'UNKNOWN');
+assert.equal(latestFarmTelemetry.sensorRecord.qualityScore, null);
+assert.equal(farmSummary.quality.avgScore, null);
+assert.equal(farmSummary.quality.warningCount, 2);
 
 let connectCalls = 0;
 let publishCalls = 0;

@@ -22,7 +22,7 @@ export type NormalizedWaterTelemetry = {
   signalStrength?: number;
   gatewayOnline?: boolean;
 };
-export type TelemetryQualityStatus = 'GOOD' | 'WARNING' | 'INVALID' | 'STALE' | 'DUPLICATE' | 'CLOCK_DRIFT';
+export type TelemetryQualityStatus = 'UNKNOWN' | 'GOOD' | 'WARNING' | 'INVALID' | 'STALE' | 'DUPLICATE' | 'CLOCK_DRIFT';
 export type TelemetryQuality = { status: TelemetryQualityStatus; score: number; warnings: string[] };
 
 @Injectable()
@@ -187,7 +187,7 @@ export class IotTelemetryNormalizerService {
       select: this.safeSnapshotSelect(false)
     });
     const avg = (key: string) => {
-      const values: number[] = snapshots.map((item: any) => Number(item[key])).filter((value: number) => Number.isFinite(value));
+      const values: number[] = snapshots.map((item: any) => this.toFiniteNumber(item[key])).filter((value: number | null): value is number => value !== null);
       return values.length ? Number((values.reduce((sum: number, value: number) => sum + value, 0) / values.length).toFixed(2)) : null;
     };
     return {
@@ -219,7 +219,7 @@ export class IotTelemetryNormalizerService {
       latest: this.sanitizeRaw(latest, false),
       quality: {
         warningCount: snapshots.filter((item: any) => item.qualityStatus && item.qualityStatus !== 'GOOD').length,
-        avgScore: this.average(snapshots.map((item: any) => Number(item.qualityScore)))
+        avgScore: this.average(snapshots.map((item: any) => item.qualityScore))
       }
     };
   }
@@ -291,7 +291,7 @@ export class IotTelemetryNormalizerService {
   }
 
   private priority(status: TelemetryQualityStatus) {
-    return { GOOD: 0, WARNING: 1, STALE: 2, CLOCK_DRIFT: 3, DUPLICATE: 4, INVALID: 5 }[status];
+    return { UNKNOWN: -1, GOOD: 0, WARNING: 1, STALE: 2, CLOCK_DRIFT: 3, DUPLICATE: 4, INVALID: 5 }[status];
   }
 
   private timeRange(query: Record<string, unknown>) {
@@ -310,9 +310,15 @@ export class IotTelemetryNormalizerService {
     return Number.isInteger(number) && number > 0 ? number : fallback;
   }
 
-  private average(values: number[]) {
-    const finite = values.filter((value) => Number.isFinite(value));
+  private average(values: unknown[]) {
+    const finite = values.map((value) => this.toFiniteNumber(value)).filter((value): value is number => value !== null);
     return finite.length ? Number((finite.reduce((sum, value) => sum + value, 0) / finite.length).toFixed(2)) : null;
+  }
+
+  private toFiniteNumber(value: unknown) {
+    if (value === null || value === undefined || value === '') return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
   }
 
   private tenantWhere<T extends Record<string, unknown>>(where: T) {

@@ -8,24 +8,24 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  tenantId  String?
-  phone     String   @unique
-  email     String?  @unique
-  name      String
-  passwordHash String?
-  tokenVersion Int     @default(0)
-  role      UserRole @default(FARMER)
-  status    UserStatus @default(ACTIVE)
-  farmId    String?
-  farm      Farm?    @relation(fields: [farmId], references: [id])
-  remark    String?  @db.Text
-  lastLoginAt DateTime?
+  id                String     @id @default(cuid())
+  tenantId          String?
+  phone             String     @unique
+  email             String?    @unique
+  name              String
+  passwordHash      String?
+  tokenVersion      Int        @default(0)
+  role              UserRole   @default(FARMER)
+  status            UserStatus @default(ACTIVE)
+  farmId            String?
+  farm              Farm?      @relation(fields: [farmId], references: [id])
+  remark            String?    @db.Text
+  lastLoginAt       DateTime?
   passwordChangedAt DateTime?
-  failedLoginCount Int @default(0)
-  lockedUntil DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  failedLoginCount  Int        @default(0)
+  lockedUntil       DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
   @@index([farmId])
   @@index([tenantId])
@@ -34,18 +34,18 @@ model User {
 }
 
 model Farm {
-  id           String     @id @default(cuid())
+  id           String   @id @default(cuid())
   tenantId     String?
   name         String
   type         FarmType
   address      String?
   contactName  String?
   contactPhone String?
-  remark       String?    @db.Text
+  remark       String?  @db.Text
   users        User[]
   fields       Field[]
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([tenantId])
 }
@@ -103,9 +103,9 @@ model CropSeason {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
+  @@unique([fieldId, cropName, year, season])
   @@index([fieldId])
   @@index([tenantId])
-  @@unique([fieldId, cropName, year, season])
 }
 
 model FarmInput {
@@ -157,30 +157,30 @@ model WorkLog {
 }
 
 model Device {
-  id             String             @id @default(cuid())
-  tenantId       String?
-  fieldId        String?
-  field          Field?             @relation(fields: [fieldId], references: [id])
-  code           String             @unique
-  name           String
-  type           DeviceType
-  thingsboardDeviceId String?       @unique
+  id                     String              @id @default(cuid())
+  tenantId               String?
+  fieldId                String?
+  field                  Field?              @relation(fields: [fieldId], references: [id])
+  code                   String              @unique
+  name                   String
+  type                   DeviceType
+  thingsboardDeviceId    String?             @unique
   thingsboardAccessToken String?
-  iotStatus      IoTDeviceStatus    @default(ACTIVE)
-  bindingSource  DeviceBindingSource @default(UNKNOWN)
-  mqttTopic      String?
-  online         Boolean            @default(false)
-  currentStatus  Json?
-  lastReportedAt DateTime?
-  lastTelemetryAt DateTime?
-  remark         String?            @db.Text
-  sensorRecords  SensorRecord[]
-  irrigationAdvices IrrigationAdvice[]
-  commands       DeviceCommand[]
-  pumpRecords    IrrigationRecord[] @relation("PumpDevice")
-  valveRecords   IrrigationRecord[] @relation("ValveDevice")
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  iotStatus              IoTDeviceStatus     @default(ACTIVE)
+  bindingSource          DeviceBindingSource @default(UNKNOWN)
+  mqttTopic              String?
+  online                 Boolean             @default(false)
+  currentStatus          Json?
+  lastReportedAt         DateTime?
+  lastTelemetryAt        DateTime?
+  remark                 String?             @db.Text
+  sensorRecords          SensorRecord[]
+  irrigationAdvices      IrrigationAdvice[]
+  commands               DeviceCommand[]
+  pumpRecords            IrrigationRecord[]  @relation("PumpDevice")
+  valveRecords           IrrigationRecord[]  @relation("ValveDevice")
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
   @@index([fieldId])
   @@index([thingsboardDeviceId])
@@ -188,31 +188,31 @@ model Device {
 }
 
 model SensorRecord {
-  id         String           @id @default(cuid())
-  tenantId   String?
-  farmId     String?
-  deviceId   String?
-  device     Device?          @relation(fields: [deviceId], references: [id])
-  fieldId    String?
-  field      Field?           @relation(fields: [fieldId], references: [id])
-  eventId    String?          @unique
-  deviceName String?
+  id                  String                 @id @default(cuid())
+  tenantId            String?
+  farmId              String?
+  deviceId            String?
+  device              Device?                @relation(fields: [deviceId], references: [id])
+  fieldId             String?
+  field               Field?                 @relation(fields: [fieldId], references: [id])
+  eventId             String?                @unique
+  deviceName          String?
   thingsboardDeviceId String?
-  type       SensorRecordType
-  value      Decimal          @db.Decimal(12, 3)
-  unit       String?
-  soilMoisture Decimal?       @db.Decimal(12, 3)
-  temperature  Decimal?       @db.Decimal(12, 3)
-  humidity     Decimal?       @db.Decimal(12, 3)
-  battery      Decimal?       @db.Decimal(12, 3)
-  rawPayload   Json?
-  normalizedJson Json?
-  source       String         @default("thingsboard")
-  reportedAt DateTime
-  receivedAt DateTime         @default(now())
-  qualityStatus TelemetryQualityStatus @default(GOOD)
-  qualityScore Int            @default(100)
-  createdAt  DateTime         @default(now())
+  type                SensorRecordType
+  value               Decimal                @db.Decimal(12, 3)
+  unit                String?
+  soilMoisture        Decimal?               @db.Decimal(12, 3)
+  temperature         Decimal?               @db.Decimal(12, 3)
+  humidity            Decimal?               @db.Decimal(12, 3)
+  battery             Decimal?               @db.Decimal(12, 3)
+  rawPayload          Json?
+  normalizedJson      Json?
+  source              String                 @default("thingsboard")
+  reportedAt          DateTime
+  receivedAt          DateTime               @default(now())
+  qualityStatus       TelemetryQualityStatus @default(UNKNOWN)
+  qualityScore        Int?
+  createdAt           DateTime               @default(now())
 
   @@index([deviceId, reportedAt])
   @@index([fieldId, reportedAt])
@@ -223,25 +223,25 @@ model SensorRecord {
 }
 
 model IrrigationRecord {
-  id             String         @id @default(cuid())
-  tenantId       String?
-  fieldId        String
-  field          Field          @relation(fields: [fieldId], references: [id])
-  cropSeasonId   String?
-  cropSeason     CropSeason?    @relation(fields: [cropSeasonId], references: [id])
-  startTime      DateTime
-  endTime        DateTime?
-  mode           IrrigationMode
-  status         IrrigationRecordStatus @default(RUNNING)
-  waterAmount    Decimal?       @db.Decimal(12, 2)
-  pumpDeviceId   String?
-  pumpDevice     Device?        @relation("PumpDevice", fields: [pumpDeviceId], references: [id])
-  valveDeviceId  String?
-  valveDevice    Device?        @relation("ValveDevice", fields: [valveDeviceId], references: [id])
-  triggerReason  String?
-  remark         String?        @db.Text
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id            String                 @id @default(cuid())
+  tenantId      String?
+  fieldId       String
+  field         Field                  @relation(fields: [fieldId], references: [id])
+  cropSeasonId  String?
+  cropSeason    CropSeason?            @relation(fields: [cropSeasonId], references: [id])
+  startTime     DateTime
+  endTime       DateTime?
+  mode          IrrigationMode
+  status        IrrigationRecordStatus @default(RUNNING)
+  waterAmount   Decimal?               @db.Decimal(12, 2)
+  pumpDeviceId  String?
+  pumpDevice    Device?                @relation("PumpDevice", fields: [pumpDeviceId], references: [id])
+  valveDeviceId String?
+  valveDevice   Device?                @relation("ValveDevice", fields: [valveDeviceId], references: [id])
+  triggerReason String?
+  remark        String?                @db.Text
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
 
   @@index([fieldId])
   @@index([cropSeasonId])
@@ -287,43 +287,43 @@ model ServiceProvider {
 }
 
 model CostRecord {
-  id             String       @id @default(cuid())
+  id             String     @id @default(cuid())
   tenantId       String?
   cropSeasonId   String
-  cropSeason     CropSeason   @relation(fields: [cropSeasonId], references: [id])
+  cropSeason     CropSeason @relation(fields: [cropSeasonId], references: [id])
   type           CostType
-  amount         Decimal      @db.Decimal(12, 2)
+  amount         Decimal    @db.Decimal(12, 2)
   occurredDate   DateTime
   sourceType     String?
   sourceId       String?
   sourceRecordId String?
-  isReversed     Boolean      @default(false)
+  isReversed     Boolean    @default(false)
   reversedAt     DateTime?
-  reverseReason  String?      @db.Text
-  remark         String?      @db.Text
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  reverseReason  String?    @db.Text
+  remark         String?    @db.Text
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
   @@index([cropSeasonId])
   @@index([tenantId])
 }
 
 model IrrigationAdvice {
-  id             String                 @id @default(cuid())
-  tenantId       String?
-  fieldId        String
-  field          Field                  @relation(fields: [fieldId], references: [id])
-  deviceId       String?
-  device         Device?                @relation(fields: [deviceId], references: [id])
-  cropSeasonId   String?
-  cropSeason     CropSeason?            @relation(fields: [cropSeasonId], references: [id])
-  soilMoisture   Decimal                @db.Decimal(12, 3)
-  action         IrrigationAdviceAction
-  message        String
-  source         IrrigationAdviceSource @default(SYSTEM)
-  status         IrrigationAdviceStatus @default(PENDING)
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
+  id           String                 @id @default(cuid())
+  tenantId     String?
+  fieldId      String
+  field        Field                  @relation(fields: [fieldId], references: [id])
+  deviceId     String?
+  device       Device?                @relation(fields: [deviceId], references: [id])
+  cropSeasonId String?
+  cropSeason   CropSeason?            @relation(fields: [cropSeasonId], references: [id])
+  soilMoisture Decimal                @db.Decimal(12, 3)
+  action       IrrigationAdviceAction
+  message      String
+  source       IrrigationAdviceSource @default(SYSTEM)
+  status       IrrigationAdviceStatus @default(PENDING)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
 
   @@index([fieldId, createdAt])
   @@index([deviceId])
@@ -395,19 +395,19 @@ model IoTSyncAudit {
 }
 
 model FieldStateSnapshot {
-  id                   String        @id @default(cuid())
+  id                   String         @id @default(cuid())
   tenantId             String?
   fieldId              String
   cropSeasonId         String?
   latestSensorRecordId String?
-  soilMoisture         Decimal?      @db.Decimal(12, 3)
-  temperature          Decimal?      @db.Decimal(12, 3)
-  humidity             Decimal?      @db.Decimal(12, 3)
-  deviceOnlineCount    Int           @default(0)
-  deviceOfflineCount   Int           @default(0)
+  soilMoisture         Decimal?       @db.Decimal(12, 3)
+  temperature          Decimal?       @db.Decimal(12, 3)
+  humidity             Decimal?       @db.Decimal(12, 3)
+  deviceOnlineCount    Int            @default(0)
+  deviceOfflineCount   Int            @default(0)
   riskLevel            FieldRiskLevel @default(NORMAL)
   summary              Json?
-  createdAt            DateTime      @default(now())
+  createdAt            DateTime       @default(now())
 
   @@index([fieldId, createdAt])
   @@index([cropSeasonId])
@@ -415,20 +415,20 @@ model FieldStateSnapshot {
 }
 
 model DecisionRecord {
-  id               String         @id @default(cuid())
-  tenantId         String?
-  fieldId          String
-  cropSeasonId     String?
-  stateSnapshotId  String?
-  decisionType     DecisionType
-  recommendation   DecisionRecommendation
-  confidence       Decimal?       @db.Decimal(5, 2)
-  reason           String         @db.Text
-  status           DecisionStatus @default(PROPOSED)
-  metadata         Json?
-  actionPlans      ActionPlan[]
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  id              String                 @id @default(cuid())
+  tenantId        String?
+  fieldId         String
+  cropSeasonId    String?
+  stateSnapshotId String?
+  decisionType    DecisionType
+  recommendation  DecisionRecommendation
+  confidence      Decimal?               @db.Decimal(5, 2)
+  reason          String                 @db.Text
+  status          DecisionStatus         @default(PROPOSED)
+  metadata        Json?
+  actionPlans     ActionPlan[]
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
 
   @@index([fieldId, createdAt])
   @@index([cropSeasonId])
@@ -437,17 +437,17 @@ model DecisionRecord {
 }
 
 model ActionPlan {
-  id          String           @id @default(cuid())
-  tenantId    String?
-  decisionId  String
-  decision    DecisionRecord   @relation(fields: [decisionId], references: [id])
-  fieldId     String
-  status      ActionPlanStatus @default(PLANNED)
-  actions     Json
-  safety      Json?
-  executions  ActionExecution[]
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id         String            @id @default(cuid())
+  tenantId   String?
+  decisionId String
+  decision   DecisionRecord    @relation(fields: [decisionId], references: [id])
+  fieldId    String
+  status     ActionPlanStatus  @default(PLANNED)
+  actions    Json
+  safety     Json?
+  executions ActionExecution[]
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
 
   @@index([decisionId])
   @@index([fieldId, createdAt])
@@ -496,53 +496,53 @@ model TenantFarm {
   role      String?
   createdAt DateTime @default(now())
 
+  @@unique([tenantId, farmId])
   @@index([tenantId])
   @@index([farmId])
-  @@unique([tenantId, farmId])
 }
 
 model SubscriptionPlan {
-  id              String   @id @default(cuid())
-  tenantId        String?
-  name            String
-  monthlyPrice    Decimal  @default(0) @db.Decimal(12, 2)
-  pricePerHectare Decimal  @default(0) @db.Decimal(12, 4)
-  pricePerDevice  Decimal  @default(0) @db.Decimal(12, 4)
-  pricePerAiDecision Decimal @default(0) @db.Decimal(12, 4)
-  features        Json?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  tenantId           String?
+  name               String
+  monthlyPrice       Decimal  @default(0) @db.Decimal(12, 2)
+  pricePerHectare    Decimal  @default(0) @db.Decimal(12, 4)
+  pricePerDevice     Decimal  @default(0) @db.Decimal(12, 4)
+  pricePerAiDecision Decimal  @default(0) @db.Decimal(12, 4)
+  features           Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@index([tenantId])
 }
 
 model BillingAccount {
-  id        String   @id @default(cuid())
+  id        String        @id @default(cuid())
   tenantId  String
   farmId    String?
   planId    String?
   status    BillingStatus @default(ACTIVE)
-  balance   Decimal  @default(0) @db.Decimal(12, 2)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  balance   Decimal       @default(0) @db.Decimal(12, 2)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 
   @@index([tenantId])
   @@index([farmId])
 }
 
 model UsageRecord {
-  id          String    @id @default(cuid())
-  tenantId    String
-  farmId      String?
-  fieldId     String?
-  deviceId    String?
-  usageType   UsageType
-  quantity    Decimal   @default(1) @db.Decimal(12, 3)
-  unit        String?
-  costAmount  Decimal   @default(0) @db.Decimal(12, 2)
-  metadata    Json?
-  occurredAt  DateTime  @default(now())
-  createdAt   DateTime  @default(now())
+  id         String    @id @default(cuid())
+  tenantId   String
+  farmId     String?
+  fieldId    String?
+  deviceId   String?
+  usageType  UsageType
+  quantity   Decimal   @default(1) @db.Decimal(12, 3)
+  unit       String?
+  costAmount Decimal   @default(0) @db.Decimal(12, 2)
+  metadata   Json?
+  occurredAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
 
   @@index([tenantId, occurredAt])
   @@index([farmId])
@@ -602,26 +602,26 @@ model OperationCost {
 }
 
 model ApprovalRequest {
-  id          String         @id @default(cuid())
-  tenantId    String?
-  farmId      String?
-  fieldId     String?
-  actionPlanId String?
+  id               String         @id @default(cuid())
+  tenantId         String?
+  farmId           String?
+  fieldId          String?
+  actionPlanId     String?
   decisionRecordId String?
-  type        ApprovalType   @default(ACTION_PLAN)
-  targetType  String
-  targetId    String
-  riskLevel   String?
-  status      ApprovalStatus @default(PENDING)
-  requestedBy String?
-  approvedBy  String?
-  reason      String?        @db.Text
-  payload     Json?
-  approvedAt  DateTime?
-  rejectedAt  DateTime?
-  decidedAt   DateTime?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  type             ApprovalType   @default(ACTION_PLAN)
+  targetType       String
+  targetId         String
+  riskLevel        String?
+  status           ApprovalStatus @default(PENDING)
+  requestedBy      String?
+  approvedBy       String?
+  reason           String?        @db.Text
+  payload          Json?
+  approvedAt       DateTime?
+  rejectedAt       DateTime?
+  decidedAt        DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   @@index([tenantId])
   @@index([farmId])
@@ -633,17 +633,17 @@ model ApprovalRequest {
 }
 
 model SafetyAlert {
-  id          String      @id @default(cuid())
-  tenantId    String?
-  farmId      String?
-  fieldId     String?
-  severity    AlertSeverity
-  alertType   String
-  message     String      @db.Text
-  status      AlertStatus @default(OPEN)
-  metadata    Json?
-  createdAt   DateTime    @default(now())
-  resolvedAt  DateTime?
+  id         String        @id @default(cuid())
+  tenantId   String?
+  farmId     String?
+  fieldId    String?
+  severity   AlertSeverity
+  alertType  String
+  message    String        @db.Text
+  status     AlertStatus   @default(OPEN)
+  metadata   Json?
+  createdAt  DateTime      @default(now())
+  resolvedAt DateTime?
 
   @@index([tenantId])
   @@index([farmId])
@@ -743,37 +743,37 @@ model MapLayer {
 }
 
 model DroneOperation {
-  id                 String               @id @default(cuid())
-  tenantId           String?
-  farmId             String
-  fieldId            String?
-  fieldBoundaryId    String?
-  droneBrand         String               @default("DJI")
-  droneModel         String?
-  operationType      DroneOperationType
-  source             DroneOperationSource
-  sourceFileName     String?
-  coordinateSystem   CoordinateSystem?
-  plannedAreaMu      Float?
-  actualAreaMu       Float?
-  coverageRate       Float?
-  overlapRate        Float?
-  missedAreaMu       Float?
-  repeatedAreaMu     Float?
-  flightDistanceM    Float?
-  flightDurationS    Int?
-  sprayVolumeL       Float?
-  chemicalName       String?
-  dosagePerMu        Float?
-  routeGeoJson       Json?
-  coverageGeoJson    Json?
-  prescriptionJson   Json?
-  rawJson            Json?
-  status             DroneOperationStatus @default(IMPORTED)
-  startedAt          DateTime?
-  finishedAt         DateTime?
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
+  id               String               @id @default(cuid())
+  tenantId         String?
+  farmId           String
+  fieldId          String?
+  fieldBoundaryId  String?
+  droneBrand       String               @default("DJI")
+  droneModel       String?
+  operationType    DroneOperationType
+  source           DroneOperationSource
+  sourceFileName   String?
+  coordinateSystem CoordinateSystem?
+  plannedAreaMu    Float?
+  actualAreaMu     Float?
+  coverageRate     Float?
+  overlapRate      Float?
+  missedAreaMu     Float?
+  repeatedAreaMu   Float?
+  flightDistanceM  Float?
+  flightDurationS  Int?
+  sprayVolumeL     Float?
+  chemicalName     String?
+  dosagePerMu      Float?
+  routeGeoJson     Json?
+  coverageGeoJson  Json?
+  prescriptionJson Json?
+  rawJson          Json?
+  status           DroneOperationStatus @default(IMPORTED)
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
 
   @@index([tenantId])
   @@index([farmId])
@@ -934,17 +934,17 @@ model IrrigationBOM {
 }
 
 model IrrigationBOMItem {
-  id        String        @id @default(cuid())
+  id        String                    @id @default(cuid())
   bomId     String
-  bom       IrrigationBOM @relation(fields: [bomId], references: [id])
+  bom       IrrigationBOM             @relation(fields: [bomId], references: [id])
   productId String?
   name      String
   category  IrrigationProductCategory
   spec      String
-  quantity  Decimal       @db.Decimal(12, 3)
+  quantity  Decimal                   @db.Decimal(12, 3)
   unit      String
-  unitPrice Decimal?      @db.Decimal(12, 2)
-  amount    Decimal?      @db.Decimal(12, 2)
+  unitPrice Decimal?                  @db.Decimal(12, 2)
+  amount    Decimal?                  @db.Decimal(12, 2)
 
   @@index([bomId])
   @@index([productId])
@@ -969,19 +969,19 @@ model HydraulicCheckResult {
 }
 
 model CropIrrigationRecipe {
-  id                            String   @id @default(cuid())
-  tenantId                      String?
-  cropType                      String
-  cropStage                     String
-  soilType                      String?
-  targetMoistureMin             Decimal  @db.Decimal(10, 3)
-  targetMoistureMax             Decimal  @db.Decimal(10, 3)
-  recommendedIrrigationMinutes  Int
-  maxDailyIrrigationMinutes     Int?
-  fertigationAdvice             Json?
-  isActive                      Boolean  @default(true)
-  createdAt                     DateTime @default(now())
-  updatedAt                     DateTime @updatedAt
+  id                           String   @id @default(cuid())
+  tenantId                     String?
+  cropType                     String
+  cropStage                    String
+  soilType                     String?
+  targetMoistureMin            Decimal  @db.Decimal(10, 3)
+  targetMoistureMax            Decimal  @db.Decimal(10, 3)
+  recommendedIrrigationMinutes Int
+  maxDailyIrrigationMinutes    Int?
+  fertigationAdvice            Json?
+  isActive                     Boolean  @default(true)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
 
   @@index([tenantId])
   @@index([cropType, cropStage, soilType])
@@ -989,21 +989,21 @@ model CropIrrigationRecipe {
 }
 
 model WettingSimulation {
-  id                    String            @id @default(cuid())
-  tenantId              String?
-  farmId                String?
-  fieldId               String
-  designId              String?
-  design                IrrigationDesign? @relation(fields: [designId], references: [id])
-  cropType              String
-  soilType              String
-  emitterFlowRate       Decimal           @db.Decimal(10, 3)
-  irrigationMinutes     Int
-  surfaceWettingRange   Decimal?          @db.Decimal(10, 3)
-  rootZoneWettingRange  Decimal?          @db.Decimal(10, 3)
-  deepPercolationRisk   DeepPercolationRisk
-  resultJson            Json?
-  createdAt             DateTime          @default(now())
+  id                   String              @id @default(cuid())
+  tenantId             String?
+  farmId               String?
+  fieldId              String
+  designId             String?
+  design               IrrigationDesign?   @relation(fields: [designId], references: [id])
+  cropType             String
+  soilType             String
+  emitterFlowRate      Decimal             @db.Decimal(10, 3)
+  irrigationMinutes    Int
+  surfaceWettingRange  Decimal?            @db.Decimal(10, 3)
+  rootZoneWettingRange Decimal?            @db.Decimal(10, 3)
+  deepPercolationRisk  DeepPercolationRisk
+  resultJson           Json?
+  createdAt            DateTime            @default(now())
 
   @@index([tenantId])
   @@index([farmId])
@@ -1119,46 +1119,46 @@ model AuditEvent {
 }
 
 model DeviceTelemetrySnapshot {
-  id                    String   @id @default(cuid())
-  tenantId              String?
-  farmId                String?
-  fieldId               String?
-  deviceId              String
-  thingsboardDeviceId   String?
-  soilMoisture          Decimal? @db.Decimal(12, 3)
-  soilTemperature       Decimal? @db.Decimal(12, 3)
-  airTemperature        Decimal? @db.Decimal(12, 3)
-  airHumidity           Decimal? @db.Decimal(12, 3)
-  lightLux              Decimal? @db.Decimal(12, 3)
-  co2Ppm                Decimal? @db.Decimal(12, 3)
-  pressureKpa           Decimal? @db.Decimal(12, 3)
-  flowRateM3h           Decimal? @db.Decimal(12, 3)
-  waterLevel            Decimal? @db.Decimal(12, 3)
-  valveOpeningPercent   Decimal? @db.Decimal(12, 3)
-  pumpFrequencyHz       Decimal? @db.Decimal(12, 3)
-  pumpRunningStatus     String?
-  fertilizerTankLevelL  Decimal? @db.Decimal(12, 3)
-  waterTankLevelL       Decimal? @db.Decimal(12, 3)
-  batteryPercent        Decimal? @db.Decimal(12, 3)
-  signalStrength        Decimal? @db.Decimal(12, 3)
-  gatewayOnline         Boolean?
-  source                String   @default("thingsboard")
-  normalizedJson        Json?
-  rawPayload            Json?
-  reportedAt            DateTime
-  receivedAt            DateTime @default(now())
-  qualityStatus         TelemetryQualityStatus @default(GOOD)
-  qualityScore          Int      @default(100)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                   String                 @id @default(cuid())
+  tenantId             String?
+  farmId               String?
+  fieldId              String?
+  deviceId             String
+  thingsboardDeviceId  String?
+  soilMoisture         Decimal?               @db.Decimal(12, 3)
+  soilTemperature      Decimal?               @db.Decimal(12, 3)
+  airTemperature       Decimal?               @db.Decimal(12, 3)
+  airHumidity          Decimal?               @db.Decimal(12, 3)
+  lightLux             Decimal?               @db.Decimal(12, 3)
+  co2Ppm               Decimal?               @db.Decimal(12, 3)
+  pressureKpa          Decimal?               @db.Decimal(12, 3)
+  flowRateM3h          Decimal?               @db.Decimal(12, 3)
+  waterLevel           Decimal?               @db.Decimal(12, 3)
+  valveOpeningPercent  Decimal?               @db.Decimal(12, 3)
+  pumpFrequencyHz      Decimal?               @db.Decimal(12, 3)
+  pumpRunningStatus    String?
+  fertilizerTankLevelL Decimal?               @db.Decimal(12, 3)
+  waterTankLevelL      Decimal?               @db.Decimal(12, 3)
+  batteryPercent       Decimal?               @db.Decimal(12, 3)
+  signalStrength       Decimal?               @db.Decimal(12, 3)
+  gatewayOnline        Boolean?
+  source               String                 @default("thingsboard")
+  normalizedJson       Json?
+  rawPayload           Json?
+  reportedAt           DateTime
+  receivedAt           DateTime               @default(now())
+  qualityStatus        TelemetryQualityStatus @default(UNKNOWN)
+  qualityScore         Int?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
 
+  @@unique([deviceId])
   @@index([tenantId])
   @@index([farmId])
   @@index([fieldId])
   @@index([deviceId])
   @@index([qualityStatus])
   @@index([receivedAt])
-  @@unique([deviceId])
 }
 
 model IrrigationRotationGroup {
@@ -1186,16 +1186,16 @@ model IrrigationRotationGroup {
 }
 
 model IrrigationRotationValve {
-  id                    String                  @id @default(cuid())
-  groupId               String
-  group                 IrrigationRotationGroup @relation(fields: [groupId], references: [id])
-  deviceId              String
-  fieldId               String?
-  zoneId                String?
-  valveOrder            Int
-  targetOpeningPercent  Decimal?                @db.Decimal(12, 3)
-  maxIrrigationMinutes  Int?
-  createdAt             DateTime                @default(now())
+  id                   String                  @id @default(cuid())
+  groupId              String
+  group                IrrigationRotationGroup @relation(fields: [groupId], references: [id])
+  deviceId             String
+  fieldId              String?
+  zoneId               String?
+  valveOrder           Int
+  targetOpeningPercent Decimal?                @db.Decimal(12, 3)
+  maxIrrigationMinutes Int?
+  createdAt            DateTime                @default(now())
 
   @@index([groupId])
   @@index([deviceId])
@@ -1222,18 +1222,18 @@ model IrrigationRotationSchedule {
 }
 
 model IrrigationRotationRun {
-  id          String                      @id @default(cuid())
-  tenantId    String?
-  farmId      String
-  groupId     String
-  group       IrrigationRotationGroup     @relation(fields: [groupId], references: [id])
-  scheduleId  String?
-  status      IrrigationRotationRunStatus @default(PENDING)
+  id           String                      @id @default(cuid())
+  tenantId     String?
+  farmId       String
+  groupId      String
+  group        IrrigationRotationGroup     @relation(fields: [groupId], references: [id])
+  scheduleId   String?
+  status       IrrigationRotationRunStatus @default(PENDING)
   actionPlanId String?
-  startedAt   DateTime?
-  finishedAt  DateTime?
-  resultJson  Json?
-  createdAt   DateTime                    @default(now())
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  resultJson   Json?
+  createdAt    DateTime                    @default(now())
 
   @@index([tenantId])
   @@index([farmId])
@@ -1243,15 +1243,15 @@ model IrrigationRotationRun {
 }
 
 model IrrigationAnomalyRule {
-  id            String                  @id @default(cuid())
+  id            String                @id @default(cuid())
   tenantId      String?
   farmId        String?
   name          String
   type          IrrigationAnomalyType
   thresholdJson Json
-  isActive      Boolean                 @default(true)
-  createdAt     DateTime                @default(now())
-  updatedAt     DateTime                @updatedAt
+  isActive      Boolean               @default(true)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
 
   @@index([tenantId])
   @@index([farmId])
@@ -1260,17 +1260,17 @@ model IrrigationAnomalyRule {
 }
 
 model IrrigationAnomalyEvent {
-  id           String                 @id @default(cuid())
+  id           String                @id @default(cuid())
   tenantId     String?
   farmId       String?
   fieldId      String?
   deviceId     String?
   type         IrrigationAnomalyType
   severity     AnomalySeverity
-  message      String                 @db.Text
+  message      String                @db.Text
   snapshotJson Json?
-  handled      Boolean                @default(false)
-  createdAt    DateTime               @default(now())
+  handled      Boolean               @default(false)
+  createdAt    DateTime              @default(now())
 
   @@index([tenantId])
   @@index([farmId])
@@ -1281,19 +1281,19 @@ model IrrigationAnomalyEvent {
 }
 
 model FertilizerTank {
-  id             String               @id @default(cuid())
+  id             String                   @id @default(cuid())
   tenantId       String?
   farmId         String
   name           String
   deviceId       String?
-  capacityL      Decimal?             @db.Decimal(12, 3)
-  currentLevelL  Decimal?             @db.Decimal(12, 3)
+  capacityL      Decimal?                 @db.Decimal(12, 3)
+  currentLevelL  Decimal?                 @db.Decimal(12, 3)
   fertilizerType String?
-  status         FertilizerTankStatus @default(ACTIVE)
+  status         FertilizerTankStatus     @default(ACTIVE)
   tasks          FertigationTask[]
   dissolveTasks  DissolveFertilizerTask[]
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
 
   @@index([tenantId])
   @@index([farmId])
@@ -1302,7 +1302,7 @@ model FertilizerTank {
 }
 
 model FertigationRecipe {
-  id                         String   @id @default(cuid())
+  id                         String            @id @default(cuid())
   tenantId                   String?
   farmId                     String?
   cropType                   String?
@@ -1310,10 +1310,10 @@ model FertigationRecipe {
   name                       String
   recipeJson                 Json
   recommendedDurationMinutes Int?
-  isActive                   Boolean  @default(true)
+  isActive                   Boolean           @default(true)
   tasks                      FertigationTask[]
-  createdAt                  DateTime @default(now())
-  updatedAt                  DateTime @updatedAt
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @updatedAt
 
   @@index([tenantId])
   @@index([farmId])
@@ -1322,24 +1322,24 @@ model FertigationRecipe {
 }
 
 model FertigationTask {
-  id                      String                @id @default(cuid())
-  tenantId                String?
-  farmId                  String
-  fieldId                 String?
-  rotationGroupId         String?
-  tankId                  String?
-  tank                    FertilizerTank?       @relation(fields: [tankId], references: [id])
-  recipeId                String?
-  recipe                  FertigationRecipe?    @relation(fields: [recipeId], references: [id])
-  status                  FertigationTaskStatus @default(DRAFT)
-  durationMinutes         Int?
-  targetWaterVolume       Decimal?              @db.Decimal(12, 3)
-  targetFertilizerVolume  Decimal?              @db.Decimal(12, 3)
-  actionPlanId            String?
-  resultJson              Json?
-  createdAt               DateTime              @default(now())
-  startedAt               DateTime?
-  finishedAt              DateTime?
+  id                     String                @id @default(cuid())
+  tenantId               String?
+  farmId                 String
+  fieldId                String?
+  rotationGroupId        String?
+  tankId                 String?
+  tank                   FertilizerTank?       @relation(fields: [tankId], references: [id])
+  recipeId               String?
+  recipe                 FertigationRecipe?    @relation(fields: [recipeId], references: [id])
+  status                 FertigationTaskStatus @default(DRAFT)
+  durationMinutes        Int?
+  targetWaterVolume      Decimal?              @db.Decimal(12, 3)
+  targetFertilizerVolume Decimal?              @db.Decimal(12, 3)
+  actionPlanId           String?
+  resultJson             Json?
+  createdAt              DateTime              @default(now())
+  startedAt              DateTime?
+  finishedAt             DateTime?
 
   @@index([tenantId])
   @@index([farmId])
@@ -1351,19 +1351,19 @@ model FertigationTask {
 }
 
 model DissolveFertilizerTask {
-  id                  String                       @id @default(cuid())
-  tenantId            String?
-  farmId              String
-  tankId              String
-  tank                FertilizerTank               @relation(fields: [tankId], references: [id])
-  status              DissolveFertilizerTaskStatus @default(PENDING)
-  waterVolumeL        Decimal?                     @db.Decimal(12, 3)
-  fertilizerWeightKg  Decimal?                     @db.Decimal(12, 3)
-  durationMinutes     Int?
-  resultJson          Json?
-  createdAt           DateTime                     @default(now())
-  startedAt           DateTime?
-  finishedAt          DateTime?
+  id                 String                       @id @default(cuid())
+  tenantId           String?
+  farmId             String
+  tankId             String
+  tank               FertilizerTank               @relation(fields: [tankId], references: [id])
+  status             DissolveFertilizerTaskStatus @default(PENDING)
+  waterVolumeL       Decimal?                     @db.Decimal(12, 3)
+  fertilizerWeightKg Decimal?                     @db.Decimal(12, 3)
+  durationMinutes    Int?
+  resultJson         Json?
+  createdAt          DateTime                     @default(now())
+  startedAt          DateTime?
+  finishedAt         DateTime?
 
   @@index([tenantId])
   @@index([farmId])
@@ -1413,18 +1413,18 @@ model CropHealthObservation {
 }
 
 model YieldRecord {
-  id          String   @id @default(cuid())
-  tenantId    String?
-  farmId      String
-  fieldId     String
-  cropType    String?
-  cropSeason  String?
-  yieldKg     Float?
-  areaMu      Float?
-  yieldPerMu  Float?
-  source      String?
-  metadata    Json?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  tenantId   String?
+  farmId     String
+  fieldId    String
+  cropType   String?
+  cropSeason String?
+  yieldKg    Float?
+  areaMu     Float?
+  yieldPerMu Float?
+  source     String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
 
   @@index([tenantId])
   @@index([farmId])
@@ -1433,16 +1433,16 @@ model YieldRecord {
 }
 
 model YieldFactor {
-  id          String          @id @default(cuid())
-  tenantId    String?
-  farmId      String
-  fieldId     String
-  cropSeason  String?
-  factorType  YieldFactorType
-  refType     String?
-  refId       String?
-  valueJson   Json?
-  createdAt   DateTime        @default(now())
+  id         String          @id @default(cuid())
+  tenantId   String?
+  farmId     String
+  fieldId    String
+  cropSeason String?
+  factorType YieldFactorType
+  refType    String?
+  refId      String?
+  valueJson  Json?
+  createdAt  DateTime        @default(now())
 
   @@index([tenantId])
   @@index([farmId])
@@ -1502,17 +1502,17 @@ model DeviceInstallationCheck {
 }
 
 model EdgeGateway {
-  id          String            @id @default(cuid())
-  tenantId    String?
-  farmId      String
-  name        String
-  code        String            @unique
-  baseUrl     String?
-  status      EdgeGatewayStatus @default(OFFLINE)
-  lastSeenAt  DateTime?
-  metadata    Json?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id         String            @id @default(cuid())
+  tenantId   String?
+  farmId     String
+  name       String
+  code       String            @unique
+  baseUrl    String?
+  status     EdgeGatewayStatus @default(OFFLINE)
+  lastSeenAt DateTime?
+  metadata   Json?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
 
   @@index([tenantId])
   @@index([farmId])
@@ -1520,37 +1520,37 @@ model EdgeGateway {
 }
 
 model EdgeDeviceBinding {
-  id          String   @id @default(cuid())
-  tenantId    String?
-  farmId      String
-  gatewayId   String
-  deviceId    String
+  id           String   @id @default(cuid())
+  tenantId     String?
+  farmId       String
+  gatewayId    String
+  deviceId     String
   localAddress String?
-  protocol    String?
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  protocol     String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
+  @@unique([gatewayId, deviceId])
   @@index([tenantId])
   @@index([farmId])
   @@index([gatewayId])
   @@index([deviceId])
-  @@unique([gatewayId, deviceId])
 }
 
 model EdgeCommand {
-  id          String            @id @default(cuid())
-  tenantId    String?
-  farmId      String
-  gatewayId   String?
-  deviceId    String?
-  command     String
-  payload     Json?
-  status      EdgeCommandStatus @default(PENDING)
-  requestId   String?           @unique
-  resultJson  Json?
-  errorMessage String?          @db.Text
-  createdAt   DateTime          @default(now())
+  id           String            @id @default(cuid())
+  tenantId     String?
+  farmId       String
+  gatewayId    String?
+  deviceId     String?
+  command      String
+  payload      Json?
+  status       EdgeCommandStatus @default(PENDING)
+  requestId    String?           @unique
+  resultJson   Json?
+  errorMessage String?           @db.Text
+  createdAt    DateTime          @default(now())
   sentAt       DateTime?
   ackAt        DateTime?
 
@@ -1562,22 +1562,22 @@ model EdgeCommand {
 }
 
 model AIRecommendation {
-  id                    String                     @id @default(cuid())
+  id                    String                   @id @default(cuid())
   tenantId              String?
   farmId                String
   fieldId               String?
   type                  AIRecommendationType
-  severity              AIRecommendationSeverity   @default(LOW)
-  status                AIRecommendationStatus     @default(ACTIVE)
+  severity              AIRecommendationSeverity @default(LOW)
+  status                AIRecommendationStatus   @default(ACTIVE)
   title                 String
-  summary               String                     @db.Text
-  explanation           String                     @db.Text
+  summary               String                   @db.Text
+  explanation           String                   @db.Text
   evidenceJson          Json?
   recommendedActionJson Json?
-  source                String                     @default("rule_pipeline")
-  confidence            Decimal?                   @db.Decimal(5, 2)
-  createdAt             DateTime                   @default(now())
-  updatedAt             DateTime                   @updatedAt
+  source                String                   @default("rule_pipeline")
+  confidence            Decimal?                 @db.Decimal(5, 2)
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
   expiresAt             DateTime?
 
   @@index([tenantId])
@@ -1723,6 +1723,7 @@ enum SensorRecordType {
 }
 
 enum TelemetryQualityStatus {
+  UNKNOWN
   GOOD
   WARNING
   INVALID
