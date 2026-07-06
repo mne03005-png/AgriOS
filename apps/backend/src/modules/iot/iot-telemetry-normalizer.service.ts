@@ -150,14 +150,15 @@ export class IotTelemetryNormalizerService {
   async latestForFarm(farmId: string, includeRaw = false) {
     const snapshot = await (this.prisma as any).deviceTelemetrySnapshot.findFirst({
       where: this.tenantWhere({ farmId }),
-      orderBy: { reportedAt: 'desc' }
+      orderBy: { reportedAt: 'desc' },
+      select: this.safeSnapshotSelect(includeRaw)
     });
     const sensorRecord = await (this.prisma as any).sensorRecord.findFirst({
       where: this.tenantWhere({ field: { farmId } }),
       orderBy: { reportedAt: 'desc' },
-      include: { device: true, field: true }
+      select: this.safeSensorRecordSelect(includeRaw)
     });
-    return { snapshot: this.sanitizeRaw(snapshot, includeRaw), sensorRecord: this.sanitizeRaw(sensorRecord, includeRaw) };
+    return this.sanitizeTelemetryResponse({ snapshot, sensorRecord }, includeRaw);
   }
 
   async latestForDevice(deviceId: string, includeRaw = false) {
@@ -180,7 +181,11 @@ export class IotTelemetryNormalizerService {
   }
 
   async farmSummary(farmId: string) {
-    const snapshots = await (this.prisma as any).deviceTelemetrySnapshot.findMany({ where: this.tenantWhere({ farmId }), orderBy: { reportedAt: 'desc' } });
+    const snapshots = await (this.prisma as any).deviceTelemetrySnapshot.findMany({
+      where: this.tenantWhere({ farmId }),
+      orderBy: { reportedAt: 'desc' },
+      select: this.safeSnapshotSelect(false)
+    });
     const avg = (key: string) => {
       const values: number[] = snapshots.map((item: any) => Number(item[key])).filter((value: number) => Number.isFinite(value));
       return values.length ? Number((values.reduce((sum: number, value: number) => sum + value, 0) / values.length).toFixed(2)) : null;
@@ -192,8 +197,8 @@ export class IotTelemetryNormalizerService {
         avgScore: avg('qualityScore'),
         warningCount: snapshots.filter((item: any) => item.qualityStatus && item.qualityStatus !== 'GOOD').length
       },
-      pressureSummary: { avgKpa: avg('pressureKpa'), latest: snapshots.find((item: any) => item.pressureKpa !== null) ?? null },
-      flowSummary: { avgM3h: avg('flowRateM3h'), latest: snapshots.find((item: any) => item.flowRateM3h !== null) ?? null },
+      pressureSummary: { avgKpa: avg('pressureKpa'), latest: this.sanitizeTelemetryResponse(snapshots.find((item: any) => item.pressureKpa !== null) ?? null, false) },
+      flowSummary: { avgM3h: avg('flowRateM3h'), latest: this.sanitizeTelemetryResponse(snapshots.find((item: any) => item.flowRateM3h !== null) ?? null, false) },
       pumpStatus: snapshots.filter((item: any) => item.pumpRunningStatus).map((item: any) => ({ deviceId: item.deviceId, status: item.pumpRunningStatus, reportedAt: item.reportedAt })),
       tankLevelWarnings: snapshots
         .filter((item: any) => Number(item.fertilizerTankLevelL ?? item.waterTankLevelL) < 20)
@@ -317,8 +322,124 @@ export class IotTelemetryNormalizerService {
   }
 
   private sanitizeRaw(item: any, includeRaw: boolean) {
-    if (!item || includeRaw) return item;
-    const { rawPayload: _rawPayload, ...rest } = item;
-    return rest;
+    return this.sanitizeTelemetryResponse(item, includeRaw);
+  }
+
+  private safeSnapshotSelect(includeRaw: boolean) {
+    return {
+      id: true,
+      tenantId: true,
+      farmId: true,
+      fieldId: true,
+      deviceId: true,
+      thingsboardDeviceId: true,
+      soilMoisture: true,
+      soilTemperature: true,
+      airTemperature: true,
+      airHumidity: true,
+      lightLux: true,
+      co2Ppm: true,
+      pressureKpa: true,
+      flowRateM3h: true,
+      waterLevel: true,
+      valveOpeningPercent: true,
+      pumpFrequencyHz: true,
+      pumpRunningStatus: true,
+      fertilizerTankLevelL: true,
+      waterTankLevelL: true,
+      batteryPercent: true,
+      signalStrength: true,
+      gatewayOnline: true,
+      source: true,
+      normalizedJson: true,
+      reportedAt: true,
+      receivedAt: true,
+      qualityStatus: true,
+      qualityScore: true,
+      createdAt: true,
+      updatedAt: true,
+      ...(includeRaw ? { rawPayload: true } : {})
+    };
+  }
+
+  private safeSensorRecordSelect(includeRaw: boolean) {
+    return {
+      id: true,
+      tenantId: true,
+      farmId: true,
+      deviceId: true,
+      fieldId: true,
+      eventId: true,
+      deviceName: true,
+      thingsboardDeviceId: true,
+      type: true,
+      value: true,
+      unit: true,
+      soilMoisture: true,
+      temperature: true,
+      humidity: true,
+      battery: true,
+      normalizedJson: true,
+      source: true,
+      reportedAt: true,
+      receivedAt: true,
+      qualityStatus: true,
+      qualityScore: true,
+      createdAt: true,
+      ...(includeRaw ? { rawPayload: true } : {}),
+      device: {
+        select: {
+          id: true,
+          tenantId: true,
+          fieldId: true,
+          code: true,
+          name: true,
+          type: true,
+          thingsboardDeviceId: true,
+          iotStatus: true,
+          bindingSource: true,
+          mqttTopic: true,
+          online: true,
+          currentStatus: true,
+          lastReportedAt: true,
+          lastTelemetryAt: true,
+          remark: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      },
+      field: {
+        select: {
+          id: true,
+          tenantId: true,
+          farmId: true,
+          name: true,
+          areaMu: true,
+          location: true,
+          latitude: true,
+          longitude: true,
+          soilType: true,
+          irrigationMethod: true,
+          createdAt: true,
+          updatedAt: true
+        }
+      }
+    };
+  }
+
+  private sanitizeTelemetryResponse(value: any, includeRaw: boolean): any {
+    if (Array.isArray(value)) return value.map((item) => this.sanitizeTelemetryResponse(item, includeRaw));
+    if (!value || typeof value !== 'object') return value;
+    if (value instanceof Date) return value;
+    const alwaysBlocked = new Set(['thingsboardaccesstoken', 'accesstoken', 'devicetoken', 'mqttpassword', 'password', 'secret', 'apikey', 'privatekey', 'authorization']);
+    const rawBlocked = new Set(['rawpayload', 'rawrequest', 'rawresponse', 'requestheaders', 'errorstack']);
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => {
+          const normalizedKey = key.toLowerCase();
+          return !alwaysBlocked.has(normalizedKey) && (includeRaw || !rawBlocked.has(normalizedKey));
+        })
+        .map(([key, item]) => [key, this.sanitizeTelemetryResponse(item, includeRaw)])
+    );
   }
 }

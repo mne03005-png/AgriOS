@@ -141,14 +141,29 @@ assert.equal(mqttCalls, 0);
 assert.equal(rpcCalls, 0);
 assert.equal(httpCalls, 0);
 
-const forbiddenKeys = new Set(['thingsboardAccessToken', 'accessToken', 'deviceToken', 'mqttPassword', 'password', 'secret', 'apiKey', 'privateKey', 'authorization']);
+const forbiddenKeys = new Set([
+  'thingsboardaccesstoken',
+  'accesstoken',
+  'devicetoken',
+  'mqttpassword',
+  'password',
+  'secret',
+  'apikey',
+  'privatekey',
+  'authorization',
+  'rawpayload',
+  'rawrequest',
+  'rawresponse',
+  'requestheaders',
+  'errorstack'
+]);
 function assertNoForbiddenKeys(value, label) {
   const stack = [value];
   while (stack.length) {
     const item = stack.pop();
     if (!item || typeof item !== 'object') continue;
     for (const [key, next] of Object.entries(item)) {
-      assert.equal(forbiddenKeys.has(key), false, `${label} exposed forbidden key ${key}`);
+      assert.equal(forbiddenKeys.has(key.toLowerCase()), false, `${label} exposed forbidden key ${key}`);
       stack.push(next);
     }
   }
@@ -273,6 +288,97 @@ assertNoForbiddenKeys(await syncAuditService.exportOne('audit-1'), 'syncAudit.ex
 assert.equal(syncAuditFindManyWhere.tenantId, 'tenant-a');
 assert.equal(syncAuditFindOneWhere.tenantId, 'tenant-a');
 assert.equal(syncAuditWriteCalls, 0);
+
+let latestFarmSensorSelect;
+let latestFarmSnapshotSelect;
+let farmSummarySnapshotSelect;
+const farmTelemetryPrisma = {
+  deviceTelemetrySnapshot: {
+    findFirst: async ({ where, select }) => {
+      assert.equal(where.tenantId, 'tenant-a');
+      latestFarmSnapshotSelect = select;
+      return {
+        id: 'snapshot-1',
+        tenantId: 'tenant-a',
+        farmId: 'farm-a',
+        fieldId: 'field-a',
+        deviceId: 'device-1',
+        pressureKpa: 120,
+        flowRateM3h: 3,
+        rawPayload: { authorization: 'must-not-leak' },
+        reportedAt: new Date()
+      };
+    },
+    findMany: async ({ where, select }) => {
+      assert.equal(where.tenantId, 'tenant-a');
+      farmSummarySnapshotSelect = select;
+      return [
+        {
+          id: 'snapshot-pressure',
+          tenantId: 'tenant-a',
+          farmId: 'farm-a',
+          fieldId: 'field-a',
+          deviceId: 'device-1',
+          pressureKpa: 120,
+          flowRateM3h: null,
+          rawPayload: { secret: 'must-not-leak' },
+          device: { thingsboardAccessToken: 'must-not-leak' },
+          reportedAt: new Date(),
+          qualityStatus: 'GOOD',
+          qualityScore: 100
+        },
+        {
+          id: 'snapshot-flow',
+          tenantId: 'tenant-a',
+          farmId: 'farm-a',
+          fieldId: 'field-a',
+          deviceId: 'device-2',
+          pressureKpa: null,
+          flowRateM3h: 7.2,
+          rawPayload: { accessToken: 'must-not-leak' },
+          latest: { device: { thingsboardAccessToken: 'must-not-leak' } },
+          reportedAt: new Date(),
+          qualityStatus: 'GOOD',
+          qualityScore: 100
+        }
+      ];
+    }
+  },
+  sensorRecord: {
+    findFirst: async ({ where, select }) => {
+      assert.equal(where.tenantId, 'tenant-a');
+      latestFarmSensorSelect = select;
+      return {
+        id: 'sensor-1',
+        tenantId: 'tenant-a',
+        farmId: 'farm-a',
+        fieldId: 'field-a',
+        deviceId: 'device-1',
+        type: 'SOIL_MOISTURE',
+        value: 31,
+        rawPayload: { deviceToken: 'must-not-leak' },
+        reportedAt: new Date(),
+        device: {
+          id: 'device-1',
+          name: 'sensor',
+          thingsboardAccessToken: 'must-not-leak',
+          deviceToken: 'must-not-leak',
+          currentStatus: { authorization: 'must-not-leak' }
+        },
+        field: { id: 'field-a', name: 'field-a' }
+      };
+    }
+  }
+};
+const farmTelemetryService = new IotTelemetryNormalizerService(farmTelemetryPrisma, context);
+const latestFarmTelemetry = await farmTelemetryService.latestForFarm('farm-a');
+assert.equal(latestFarmSensorSelect.rawPayload, undefined);
+assert.equal(latestFarmSensorSelect.device.select.thingsboardAccessToken, undefined);
+assert.equal(latestFarmSnapshotSelect.rawPayload, undefined);
+assertNoForbiddenKeys(latestFarmTelemetry, 'latestForFarm');
+const farmSummary = await farmTelemetryService.farmSummary('farm-a');
+assert.equal(farmSummarySnapshotSelect.rawPayload, undefined);
+assertNoForbiddenKeys(farmSummary, 'farmSummary');
 
 let connectCalls = 0;
 let publishCalls = 0;
