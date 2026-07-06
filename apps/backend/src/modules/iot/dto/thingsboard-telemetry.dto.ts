@@ -14,6 +14,14 @@ export class ThingsBoardTelemetryDto {
   @Allow()
   thingsboardDeviceId?: string;
 
+  @ApiPropertyOptional({ description: 'Idempotency key from ThingsBoard rule chain or upstream gateway', example: 'tb-evt-20260703-0001' })
+  @Allow()
+  eventId?: string;
+
+  @ApiPropertyOptional({ description: 'Original telemetry source name', example: 'thingsboard-rule-chain' })
+  @Allow()
+  source?: string;
+
   @ApiPropertyOptional({ description: '遥测时间戳，毫秒', example: 1782780000000 })
   @Allow()
   ts?: number;

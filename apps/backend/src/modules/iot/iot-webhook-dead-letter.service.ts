@@ -1,11 +1,14 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RequestContextService } from '../../common/request-context.service';
 import { OperationLogService } from '../operation-log/operation-log.service';
 
 type CreateDeadLetterInput = {
   eventType: string;
   deviceName?: string;
   thingsboardDeviceId?: string;
+  eventId?: string;
+  originalSource?: string;
   rawPayload?: unknown;
   errorMessage: string;
   errorStack?: string;
@@ -15,13 +18,16 @@ type CreateDeadLetterInput = {
 export class IotWebhookDeadLetterService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly operationLogService: OperationLogService
+    private readonly operationLogService: OperationLogService,
+    private readonly requestContext: RequestContextService
   ) {}
 
   create(input: CreateDeadLetterInput) {
     return (this.prisma as any).ioTWebhookDeadLetter.create({
       data: {
         source: 'thingsboard',
+        originalSource: input.originalSource,
+        eventId: input.eventId,
         eventType: input.eventType,
         deviceName: input.deviceName,
         thingsboardDeviceId: input.thingsboardDeviceId,
@@ -53,16 +59,23 @@ export class IotWebhookDeadLetterService {
         ...(typeof query.to === 'string' ? { lte: new Date(query.to) } : {})
       };
     }
+    const scopedWhere = this.tenantWhere(where);
     const [items, total] = await this.prisma.$transaction([
       (this.prisma as any).ioTWebhookDeadLetter.findMany({
-        where,
+        where: scopedWhere,
         skip: (page - 1) * pageSize,
         take: pageSize,
         orderBy: { createdAt: 'desc' }
       }),
-      (this.prisma as any).ioTWebhookDeadLetter.count({ where })
+      (this.prisma as any).ioTWebhookDeadLetter.count({ where: scopedWhere })
     ]);
-    return { total, page, pageSize, items };
+    return { total, page, pageSize, items: items.map((item: any) => this.sanitizeRaw(item)) };
+  }
+
+  async findOne(id: string) {
+    const deadLetter = await (this.prisma as any).ioTWebhookDeadLetter.findFirst({ where: this.tenantWhere({ id }) });
+    if (!deadLetter) throw new NotFoundException('Webhook dead letter not found');
+    return this.sanitizeRaw(deadLetter);
   }
 
   async markResolved(id: string, remark?: string) {
@@ -94,13 +107,6 @@ export class IotWebhookDeadLetterService {
 
   async diff(id: string, handler: (payload: any) => Promise<Record<string, any>>) {
     const preview = await this.preview(id, handler);
-    await this.operationLogService.create({
-      action: 'DEAD_LETTER_DIFF_VIEWED',
-      targetType: 'IoTWebhookDeadLetter',
-      targetId: id,
-      description: 'View IoT webhook dead letter replay diff',
-      metadata: { preview } as any
-    });
     return {
       deadLetterId: id,
       deviceName: preview.deviceName,
@@ -268,5 +274,18 @@ export class IotWebhookDeadLetterService {
   private positiveInt(value: unknown, fallback: number) {
     const number = Number(value);
     return Number.isInteger(number) && number > 0 ? number : fallback;
+  }
+
+  private sanitizeRaw(item: any) {
+    if (!item) return item;
+    const { rawPayload: _rawPayload, errorStack: _errorStack, ...rest } = item;
+    return rest;
+  }
+
+  private tenantWhere<T extends Record<string, unknown>>(where: T) {
+    const tenantId = this.requestContext.getTenantId();
+    const role = this.requestContext.getRole();
+    if (!tenantId || role === 'PLATFORM_ADMIN' || role === 'SUPER_ADMIN') return where;
+    return { ...where, tenantId };
   }
 }

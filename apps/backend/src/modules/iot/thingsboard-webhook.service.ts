@@ -1,4 +1,5 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IrrigationRuleService } from '../irrigation-rule/irrigation-rule.service';
 import { IrrigationMonitoringService } from '../irrigation-monitoring/irrigation-monitoring.service';
@@ -19,6 +20,9 @@ type NormalizedTelemetry = {
   batteryPercent?: number;
   battery?: number;
   signalStrength?: number;
+  eventId?: string;
+  source: string;
+  receivedAt: Date;
   recordedAt: Date;
   primaryType: 'SOIL_MOISTURE' | 'TEMPERATURE' | 'HUMIDITY';
   primaryValue: number;
@@ -39,8 +43,12 @@ export class ThingsBoardWebhookService {
     private readonly deadLetterService: IotWebhookDeadLetterService
   ) {}
 
-  async handleTelemetry(secret: string | undefined, dto: ThingsBoardTelemetryDto) {
-    this.validateSecret(secret);
+  async handleTelemetry(
+    secret: string | undefined,
+    dto: ThingsBoardTelemetryDto,
+    meta: { signature?: string; timestamp?: string; eventId?: string; contentLength?: string } = {}
+  ) {
+    await this.validateWebhook(secret, dto, meta);
     return this.processTelemetry(dto);
   }
 
@@ -123,6 +131,23 @@ export class ThingsBoardWebhookService {
     }
 
     try {
+      const eventDuplicate = normalized.eventId ? await this.findDuplicatedEvent(normalized.eventId) : null;
+      if (eventDuplicate) {
+        return {
+          accepted: true,
+          saved: false,
+          duplicated: true,
+          eventId: normalized.eventId,
+          sensorRecordId: eventDuplicate.id,
+          adviceCreated: false,
+          irrigationAdviceCreated: false,
+          adviceId: null,
+          duplicatedTelemetry: true,
+          skippedReason: 'Duplicated eventId was skipped.',
+          warnings: ['Duplicate eventId was received.']
+        };
+      }
+
       const { device, plotId, farmId } = await this.iotDeviceService.resolvePlotBinding({
         deviceName: normalized.deviceName,
         thingsboardDeviceId: normalized.thingsboardDeviceId
@@ -130,28 +155,39 @@ export class ThingsBoardWebhookService {
       const waterTelemetry = this.telemetryNormalizerService.normalize(dto);
 
       const duplicated = await this.findDuplicatedSensorRecord(device?.id, normalized);
-      if (duplicated) {
+      const quality = this.telemetryNormalizerService.assessQuality(waterTelemetry, normalized.recordedAt, Boolean(duplicated), normalized.receivedAt);
+      if (!device || !plotId) {
+        const deadLetter = await this.safeCreateDeadLetter(
+          dto,
+          !device ? 'unbound-device' : 'unbound-field',
+          normalized.deviceName,
+          normalized.thingsboardDeviceId,
+          new Error(!device ? 'Telemetry device is not bound to AgriOS.' : 'Telemetry device is not bound to a field.'),
+          normalized.eventId,
+          normalized.source
+        );
         return {
-          accepted: true,
+          accepted: false,
           saved: false,
-          duplicated: true,
+          duplicated: false,
           deviceMatched: Boolean(device),
           fieldBound: Boolean(plotId),
-          sensorRecordId: duplicated.id,
+          deadLetterId: deadLetter?.id ?? null,
           adviceCreated: false,
           irrigationAdviceCreated: false,
           adviceId: null,
-          duplicatedTelemetry: true,
-          skippedReason: 'Duplicated telemetry was skipped.',
-          warnings: normalized.warnings
+          skippedReason: !device ? 'Device is not bound to AgriOS.' : 'Device is not bound to a field.',
+          warnings: [...normalized.warnings, ...quality.warnings]
         };
       }
 
       const sensorRecord = await (this.prisma as any).sensorRecord.create({
         data: {
           tenantId: device?.tenantId,
+          farmId,
           deviceId: device?.id,
           fieldId: plotId,
+          eventId: normalized.eventId,
           deviceName: normalized.deviceName,
           thingsboardDeviceId: normalized.thingsboardDeviceId,
           type: normalized.primaryType,
@@ -163,8 +199,11 @@ export class ThingsBoardWebhookService {
           battery: normalized.batteryPercent ?? normalized.battery,
           rawPayload: normalized.rawPayload,
           normalizedJson: waterTelemetry,
-          source: 'thingsboard',
-          reportedAt: normalized.recordedAt
+          source: normalized.source,
+          reportedAt: normalized.recordedAt,
+          receivedAt: normalized.receivedAt,
+          qualityStatus: quality.status,
+          qualityScore: quality.score
         }
       });
 
@@ -176,7 +215,10 @@ export class ThingsBoardWebhookService {
         thingsboardDeviceId: normalized.thingsboardDeviceId,
         rawPayload: normalized.rawPayload,
         reportedAt: normalized.recordedAt,
-        normalized: waterTelemetry
+        receivedAt: normalized.receivedAt,
+        normalized: waterTelemetry,
+        source: normalized.source,
+        quality
       });
       if (telemetrySnapshot) {
         await this.irrigationMonitoringService.evaluate(telemetrySnapshot);
@@ -211,11 +253,13 @@ export class ThingsBoardWebhookService {
           humidity: normalized.humidity,
           batteryPercent: normalized.batteryPercent,
           signalStrength: normalized.signalStrength,
-          warnings: normalized.warnings,
+          qualityStatus: quality.status,
+          qualityScore: quality.score,
+          warnings: [...normalized.warnings, ...quality.warnings],
           warning: plotId ? undefined : 'Device is not bound to a field; advice was not generated.'
         }
       });
-      await this.syncAuditServiceSafe(dto, normalized, Boolean(sensorRecord), Boolean(telemetrySnapshot), normalized.warnings);
+      await this.syncAuditServiceSafe(dto, normalized, Boolean(sensorRecord), Boolean(telemetrySnapshot), [...normalized.warnings, ...quality.warnings], device?.tenantId);
 
       let irrigationAdvice: any = null;
       let adviceWarning: string | null = null;
@@ -242,7 +286,7 @@ export class ThingsBoardWebhookService {
         skippedReason: irrigationAdvice ? null : plotId ? 'No new irrigation advice was needed.' : 'Device is not bound to a field.',
         warnings: [
           ...normalized.warnings,
-          ...(plotId ? [] : ['Device is not bound to a field; advice was not generated.']),
+          ...quality.warnings,
           ...(adviceWarning ? [adviceWarning] : [])
         ]
       };
@@ -252,7 +296,9 @@ export class ThingsBoardWebhookService {
         'telemetry',
         normalized.deviceName,
         normalized.thingsboardDeviceId,
-        error
+        error,
+        normalized.eventId,
+        normalized.source
       );
       return {
         accepted: false,
@@ -264,11 +310,36 @@ export class ThingsBoardWebhookService {
     }
   }
 
+  private async validateWebhook(secret: string | undefined, dto: ThingsBoardTelemetryDto, meta: { signature?: string; timestamp?: string; eventId?: string; contentLength?: string }) {
+    const bytes = Number(meta.contentLength ?? Buffer.byteLength(JSON.stringify(dto)));
+    if (Number.isFinite(bytes) && bytes > 256 * 1024) throw new BadRequestException('Telemetry payload is too large');
+    this.validateSecret(secret);
+    this.validateHmac(dto, meta.signature, meta.timestamp);
+    const eventId = this.stringValue(meta.eventId ?? dto.eventId);
+    if (eventId && (await this.findDuplicatedEvent(eventId))) return;
+  }
+
   private validateSecret(secret?: string) {
     const expected = process.env.THINGSBOARD_WEBHOOK_SECRET;
     if (!expected || secret !== expected) {
-      throw new UnauthorizedException('Invalid ThingsBoard webhook secret');
+      throw new UnauthorizedException('Invalid webhook credentials');
     }
+  }
+
+  private validateHmac(dto: ThingsBoardTelemetryDto, signature?: string, timestamp?: string) {
+    const secret = process.env.THINGSBOARD_WEBHOOK_HMAC_SECRET ?? process.env.THINGSBOARD_WEBHOOK_SECRET;
+    if (!secret) throw new UnauthorizedException('Invalid webhook credentials');
+    if (!signature || !timestamp) throw new UnauthorizedException('Invalid webhook credentials');
+    const time = Number(timestamp);
+    if (!Number.isFinite(time)) throw new UnauthorizedException('Invalid webhook credentials');
+    const timeMs = time < 10_000_000_000 ? time * 1000 : time;
+    if (Math.abs(Date.now() - timeMs) > 5 * 60 * 1000) throw new UnauthorizedException('Invalid webhook credentials');
+    const payload = `${timestamp}.${JSON.stringify(dto)}`;
+    const expected = createHmac('sha256', secret).update(payload).digest('hex');
+    const normalized = signature.startsWith('sha256=') ? signature.slice(7) : signature;
+    const left = Buffer.from(expected);
+    const right = Buffer.from(normalized);
+    if (left.length !== right.length || !timingSafeEqual(left, right)) throw new UnauthorizedException('Invalid webhook credentials');
   }
 
   private normalize(dto: ThingsBoardTelemetryDto): NormalizedTelemetry {
@@ -306,6 +377,8 @@ export class ThingsBoardWebhookService {
     return {
       deviceName: this.stringValue(dto.deviceName ?? (dto as any).thingsboardDeviceName ?? metadata.deviceName),
       thingsboardDeviceId: this.stringValue(dto.thingsboardDeviceId ?? dto.deviceId ?? metadata.thingsboardDeviceId ?? metadata.deviceId),
+      eventId: this.stringValue(dto.eventId ?? source.eventId ?? metadata.eventId),
+      source: this.stringValue(dto.source ?? source.source ?? metadata.source) ?? 'thingsboard',
       soilMoisture,
       soilTemperature,
       temperature,
@@ -314,6 +387,7 @@ export class ThingsBoardWebhookService {
       batteryPercent,
       battery,
       signalStrength,
+      receivedAt: new Date(),
       recordedAt,
       primaryType: primary.type,
       primaryValue: primary.value,
@@ -380,6 +454,10 @@ export class ThingsBoardWebhookService {
     });
   }
 
+  private findDuplicatedEvent(eventId: string) {
+    return (this.prisma as any).sensorRecord.findUnique({ where: { eventId } });
+  }
+
   private async createAdviceIfNeeded(plotId: string, deviceId: string | undefined, soilMoisture: number) {
     const evaluation = this.irrigationRuleService.evaluate({ fieldId: plotId, soilMoisture });
     if (evaluation.action !== 'SHOULD_IRRIGATE' && evaluation.action !== 'STOP_IRRIGATION') return null;
@@ -427,7 +505,9 @@ export class ThingsBoardWebhookService {
     eventType: string,
     deviceName: string | undefined,
     thingsboardDeviceId: string | undefined,
-    error: unknown
+    error: unknown,
+    eventId?: string,
+    originalSource?: string
   ) {
     const normalizedError = error instanceof Error ? error : new Error(String(error));
     return this.deadLetterService
@@ -436,6 +516,8 @@ export class ThingsBoardWebhookService {
         deviceName,
         thingsboardDeviceId,
         rawPayload: payload,
+        eventId,
+        originalSource,
         errorMessage: normalizedError.message,
         errorStack: normalizedError.stack
       })
@@ -447,10 +529,12 @@ export class ThingsBoardWebhookService {
     normalized: NormalizedTelemetry,
     sensorRecordCreated: boolean,
     snapshotUpdated: boolean,
-    warnings: string[]
+    warnings: string[],
+    tenantId?: string | null
   ) {
     return this.iotDeviceService
       .recordTelemetryAudit({
+        tenantId,
         payload,
         deviceName: normalized.deviceName,
         thingsboardDeviceId: normalized.thingsboardDeviceId,

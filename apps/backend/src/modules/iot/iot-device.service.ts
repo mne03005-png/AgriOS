@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { ListQueryDto } from '../../common/dto/list-query.dto';
 import { getPagination, paginatedResult } from '../../common/pagination';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RequestContextService } from '../../common/request-context.service';
 import { OperationLogService } from '../operation-log/operation-log.service';
 import { BindPlotDto } from './dto/bind-plot.dto';
 import { ConfirmBindingCandidateDto } from './dto/confirm-binding-candidate.dto';
@@ -17,7 +18,8 @@ export class IotDeviceService {
     private readonly prisma: PrismaService,
     private readonly thingsBoardClient: ThingsBoardClientService,
     private readonly operationLogService: OperationLogService,
-    private readonly syncAuditService: IotSyncAuditService
+    private readonly syncAuditService: IotSyncAuditService,
+    private readonly requestContext: RequestContextService
   ) {}
 
   findByDeviceName(deviceName?: string) {
@@ -47,18 +49,39 @@ export class IotDeviceService {
 
   async findAll(query: ListQueryDto = {}) {
     const { page, pageSize, skip, take } = getPagination(query);
-    const where = query.keyword ? { OR: [{ name: { contains: query.keyword } }, { code: { contains: query.keyword } }] } : {};
+    const where = this.tenantWhere(query.keyword ? { OR: [{ name: { contains: query.keyword } }, { code: { contains: query.keyword } }] } : {});
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.device.findMany({ where, skip, take, orderBy: { createdAt: 'desc' }, include: { field: true } }),
+      this.prisma.device.findMany({ where, skip, take, orderBy: { createdAt: 'desc' }, select: this.safeDeviceSelect(true) }),
       this.prisma.device.count({ where })
     ]);
-    return paginatedResult(items, page, pageSize, total);
+    return paginatedResult(items.map((item) => this.toSafeDeviceResponse(item)), page, pageSize, total);
   }
 
   async findOne(id: string) {
-    const device = await (this.prisma as any).device.findUnique({ where: { id }, include: { field: true } });
+    const device = await (this.prisma as any).device.findFirst({ where: this.tenantWhere({ id }), select: this.safeDeviceSelect(true) });
     if (!device) throw new NotFoundException('IoT device not found');
-    return device;
+    return this.toSafeDeviceResponse(device);
+  }
+
+  async findByField(fieldId: string, query: ListQueryDto = {}) {
+    const { page, pageSize, skip, take } = getPagination(query);
+    const where = this.tenantWhere({ fieldId });
+    const [items, total] = await this.prisma.$transaction([
+      (this.prisma as any).device.findMany({ where, skip, take, orderBy: { createdAt: 'desc' }, select: this.safeDeviceSelect(true) }),
+      (this.prisma as any).device.count({ where })
+    ]);
+    return paginatedResult(items.map((item: any) => this.toSafeDeviceResponse(item)), page, pageSize, total);
+  }
+
+  status() {
+    return {
+      readOnly: true,
+      controlEnabled: false,
+      deviceControlMode: process.env.DEVICE_CONTROL_MODE ?? 'MOCK',
+      deviceControlDryRun: (process.env.DEVICE_CONTROL_DRY_RUN ?? 'true').toLowerCase() === 'true',
+      valveAllowRealControl: (process.env.VALVE_ALLOW_REAL_CONTROL ?? 'false').toLowerCase() === 'true',
+      enableAutoExecution: (process.env.ENABLE_AUTO_EXECUTION ?? 'false').toLowerCase() === 'true'
+    };
   }
 
   create(dto: CreateIotDeviceDto) {
@@ -132,7 +155,7 @@ export class IotDeviceService {
   }
 
   async getHealth(id: string) {
-    const device = await (this.prisma as any).device.findUnique({ where: { id }, include: { field: true } });
+    const device = await (this.prisma as any).device.findFirst({ where: this.tenantWhere({ id }), select: this.safeDeviceSelect(true) });
     if (!device) throw new NotFoundException('IoT device not found');
 
     const lastTelemetryAt = device.lastTelemetryAt ?? device.lastReportedAt;
@@ -141,7 +164,7 @@ export class IotDeviceService {
     const offlineMinutes = this.getOfflineMinutes();
     const isOnline = minutesSinceLastTelemetry !== null && minutesSinceLastTelemetry <= offlineMinutes;
     return {
-      device,
+      device: this.toSafeDeviceResponse(device),
       iotStatus: isOnline ? 'ONLINE' : device.iotStatus === 'UNBOUND' ? 'UNBOUND' : 'OFFLINE',
       lastTelemetryAt,
       minutesSinceLastTelemetry,
@@ -266,6 +289,7 @@ export class IotDeviceService {
 
     const rawResult = { synced: items.length, created, updated, bound, unbound, warnings };
     await this.syncAuditService.create({
+      tenantId: this.requestContext.getTenantId(),
       syncType: 'devices',
       total: thingsBoardDevices.length,
       created,
@@ -287,7 +311,17 @@ export class IotDeviceService {
   }
 
   async getBindingCandidates(id: string) {
-    const device = await (this.prisma as any).device.findUnique({ where: { id }, include: { field: true } });
+    const device = await (this.prisma as any).device.findFirst({
+      where: this.tenantWhere({ id }),
+      select: {
+        id: true,
+        name: true,
+        fieldId: true,
+        bindingSource: true,
+        thingsboardDeviceId: true,
+        currentStatus: true
+      }
+    });
     if (!device) throw new NotFoundException('IoT device not found');
 
     const warnings: string[] = [];
@@ -396,16 +430,24 @@ export class IotDeviceService {
     ];
     const devices = deviceOr.length
       ? await (this.prisma as any).device.findMany({
-          where: { OR: deviceOr },
-          include: { field: { include: { farm: true } } },
+          where: this.tenantWhere({ OR: deviceOr }),
+          select: {
+            id: true,
+            name: true,
+            fieldId: true,
+            thingsboardDeviceId: true,
+            iotStatus: true,
+            bindingSource: true,
+            field: { select: { farmId: true } }
+          },
           take: 10
         })
       : [];
     const fields = deviceName
       ? await this.prisma.field.findMany({
-          where: {
+          where: this.tenantWhere({
             OR: [{ name: { contains: deviceName } }, { farm: { name: { contains: deviceName } } }]
-          },
+          }),
           include: { farm: true },
           take: 10
         })
@@ -500,6 +542,7 @@ export class IotDeviceService {
   }
 
   recordTelemetryAudit(input: {
+    tenantId?: string | null;
     payload: unknown;
     deviceName?: string;
     thingsboardDeviceId?: string;
@@ -509,6 +552,7 @@ export class IotDeviceService {
   }) {
     const now = new Date();
     return this.syncAuditService.create({
+      tenantId: input.tenantId,
       syncType: 'telemetry',
       total: 1,
       created: input.sensorRecordCreated ? 1 : 0,
@@ -709,5 +753,70 @@ export class IotDeviceService {
 
   private errorMessage(error: unknown) {
     return error instanceof Error ? error.message : String(error);
+  }
+
+  private tenantWhere<T extends Record<string, unknown>>(where: T) {
+    const tenantId = this.requestContext.getTenantId();
+    if (!tenantId || this.requestContext.isPlatformAdmin()) return where;
+    return { ...where, tenantId };
+  }
+
+  private safeDeviceSelect(includeField = false) {
+    return {
+      id: true,
+      tenantId: true,
+      fieldId: true,
+      code: true,
+      name: true,
+      type: true,
+      thingsboardDeviceId: true,
+      iotStatus: true,
+      bindingSource: true,
+      mqttTopic: true,
+      online: true,
+      currentStatus: true,
+      lastReportedAt: true,
+      lastTelemetryAt: true,
+      remark: true,
+      createdAt: true,
+      updatedAt: true,
+      ...(includeField
+        ? {
+            field: {
+              select: {
+                id: true,
+                tenantId: true,
+                farmId: true,
+                name: true,
+                areaMu: true,
+                location: true,
+                latitude: true,
+                longitude: true,
+                soilType: true,
+                irrigationMethod: true,
+                createdAt: true,
+                updatedAt: true
+              }
+            }
+          }
+        : {})
+    };
+  }
+
+  private toSafeDeviceResponse(device: any) {
+    if (!device || typeof device !== 'object') return device;
+    return this.sanitizeSensitiveKeys(device);
+  }
+
+  private sanitizeSensitiveKeys(value: any): any {
+    if (Array.isArray(value)) return value.map((item) => this.sanitizeSensitiveKeys(item));
+    if (!value || typeof value !== 'object') return value;
+    if (value instanceof Date) return value;
+    const blocked = new Set(['thingsboardAccessToken', 'accessToken', 'deviceToken', 'mqttPassword', 'password', 'secret', 'apiKey', 'privateKey', 'authorization']);
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => !blocked.has(key))
+        .map(([key, item]) => [key, this.sanitizeSensitiveKeys(item)])
+    );
   }
 }

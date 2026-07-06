@@ -3,11 +3,12 @@ param(
   [string]$FarmId = $(if ($env:AGRIOS_FARM_ID) { $env:AGRIOS_FARM_ID } else { "demo" }),
   [string]$DeviceId = $(if ($env:AGRIOS_DEVICE_ID) { $env:AGRIOS_DEVICE_ID } else { "replace_me_device_id" }),
   [string]$EdgeBaseUrl = $(if ($env:EDGE_CONTROLLER_BASE_URL) { $env:EDGE_CONTROLLER_BASE_URL } else { "http://localhost:18080" }),
-  [string]$WebhookSecret = $(if ($env:THINGSBOARD_WEBHOOK_SECRET) { $env:THINGSBOARD_WEBHOOK_SECRET } else { "agrios_tb_secret" }),
+  [string]$WebhookSecret = $env:THINGSBOARD_WEBHOOK_SECRET,
   [string]$Token = $env:AGRIOS_TOKEN
 )
 
 $ErrorActionPreference = "Stop"
+if (-not $WebhookSecret) { throw "THINGSBOARD_WEBHOOK_SECRET is required" }
 $results = @()
 
 function Add-Result([string]$Name, [string]$Status, [string]$Message) {
@@ -159,4 +160,3 @@ $results | Format-Table -AutoSize
 if ($results.Status -contains "FAIL") {
   exit 1
 }
-

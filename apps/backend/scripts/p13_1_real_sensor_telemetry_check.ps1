@@ -3,11 +3,12 @@ param(
   [string]$FarmId = $(if ($env:AGRIOS_FARM_ID) { $env:AGRIOS_FARM_ID } else { "demo" }),
   [string]$DeviceName = $(if ($env:AGRIOS_DEVICE_NAME) { $env:AGRIOS_DEVICE_NAME } else { "FARM-demo-FIELD-A-SOIL-001" }),
   [string]$ThingsboardDeviceId = $(if ($env:THINGSBOARD_DEVICE_ID) { $env:THINGSBOARD_DEVICE_ID } else { "tb-demo-soil-a" }),
-  [string]$WebhookSecret = $(if ($env:THINGSBOARD_WEBHOOK_SECRET) { $env:THINGSBOARD_WEBHOOK_SECRET } else { "agrios_tb_secret" }),
+  [string]$WebhookSecret = $env:THINGSBOARD_WEBHOOK_SECRET,
   [string]$Token = $env:AGRIOS_TOKEN
 )
 
 $ErrorActionPreference = "Stop"
+if (-not $WebhookSecret) { throw "THINGSBOARD_WEBHOOK_SECRET is required" }
 $results = @()
 
 function Add-Result([string]$Name, [string]$Status, [string]$Message) {

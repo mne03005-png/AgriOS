@@ -706,3 +706,72 @@ button:disabled {
   background: var(--agri-green);
   font-weight: 900;
 }
+
+.readonly-banner {
+  border-left: 4px solid #2f7d68;
+}
+
+.device-row {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(27, 38, 49, 0.12);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.device-row small,
+.trend-row span {
+  display: block;
+  color: #667085;
+  font-size: 12px;
+}
+
+.quality-pill {
+  min-width: 72px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef7f2;
+  color: #23614f;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(27, 38, 49, 0.12);
+  border-radius: 8px;
+}
+
+.segmented button {
+  min-width: 56px;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: transparent;
+}
+
+.segmented button.active {
+  background: #173b33;
+  color: #fff;
+}
+
+.trend-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(27, 38, 49, 0.1);
+}
+
+.empty-state {
+  color: #667085;
+  padding: 12px 0;
+}
