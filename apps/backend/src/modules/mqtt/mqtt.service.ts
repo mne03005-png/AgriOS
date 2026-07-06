@@ -8,6 +8,8 @@ import { MQTT_TOPICS } from './mqtt-topics';
 
 @Injectable()
 export class MqttService implements OnModuleInit, OnModuleDestroy {
+  static connectFactory = mqtt.connect;
+
   private readonly logger = new Logger(MqttService.name);
   private client?: MqttClient;
 
@@ -20,21 +22,19 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     const configuredBrokerUrl = this.configService.get<string>('MQTT_BROKER_URL');
     const deviceControlMode = this.configService.get<string>('DEVICE_CONTROL_MODE') ?? 'MOCK';
+    const dryRun = this.booleanConfig('DEVICE_CONTROL_DRY_RUN', true);
 
-    const shouldConnect =
-      Boolean(configuredBrokerUrl) ||
-      deviceControlMode === 'MQTT_DIRECT' ||
-      deviceControlMode === 'MQTT';
+    const shouldConnect = deviceControlMode === 'MQTT_DIRECT' && !dryRun;
 
     if (!shouldConnect) {
-      this.logger.log(`MQTT connection disabled for DEVICE_CONTROL_MODE=${deviceControlMode}`);
+      this.logger.log(`MQTT connection disabled for DEVICE_CONTROL_MODE=${deviceControlMode}, DEVICE_CONTROL_DRY_RUN=${dryRun}`);
       return;
     }
 
     const brokerUrl = configuredBrokerUrl ?? 'mqtt://localhost:1883';
     const clientId = this.configService.get<string>('MQTT_CLIENT_ID') ?? 'agrios-backend';
 
-    this.client = mqtt.connect(brokerUrl, { clientId });
+    this.client = MqttService.connectFactory(brokerUrl, { clientId });
     this.client.on('connect', () => {
       this.logger.log(`Connected to MQTT broker: ${brokerUrl}`);
       this.client?.subscribe([MQTT_TOPICS.telemetryWildcard, MQTT_TOPICS.statusWildcard, MQTT_TOPICS.ackWildcard]);
@@ -199,5 +199,11 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
         metadata: { requestId: data.requestId, status, message: typeof data.message === 'string' ? data.message : undefined } as any
       }
     });
+  }
+
+  private booleanConfig(key: string, fallback: boolean) {
+    const value = this.configService.get<string>(key);
+    if (value === undefined || value === null || value === '') return fallback;
+    return ['true', '1', 'yes', 'on'].includes(String(value).toLowerCase());
   }
 }
