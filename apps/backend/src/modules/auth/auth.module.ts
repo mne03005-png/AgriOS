@@ -1,5 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { AuditModule } from '../audit/audit.module';
 import { AuthController } from './auth.controller';
@@ -19,7 +20,7 @@ import { RolesGuard } from './roles.guard';
     })
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtAuthGuard, RolesGuard],
+  providers: [AuthService, JwtAuthGuard, RolesGuard, { provide: APP_GUARD, useClass: JwtAuthGuard }],
   exports: [AuthService, JwtAuthGuard, RolesGuard, JwtModule]
 })
 export class AuthModule {}
