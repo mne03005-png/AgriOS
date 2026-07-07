@@ -17,14 +17,17 @@ export class WorkLogService {
   ) {}
 
   async create(dto: CreateWorkLogDto) {
+    await this.assertFieldInScope(dto.fieldId);
+    await this.assertCropSeasonInScope(dto.cropSeasonId);
     return this.prisma.$transaction(async (tx: any) => {
-      const workLog = await tx.workLog.create({ data: this.toPrismaData(dto), include: { cropSeason: true } });
+      const workLog = await tx.workLog.create({ data: { ...this.toPrismaData(dto), ...this.tenantData() }, include: { cropSeason: true } });
       if (dto.cost && dto.cost > 0) {
         const existingCost = await tx.costRecord.findFirst({ where: { sourceRecordId: workLog.id } });
         if (!existingCost) {
           await tx.costRecord.create({
             data: {
               cropSeasonId: workLog.cropSeasonId,
+              tenantId: workLog.tenantId,
               type: this.mapWorkLogCostType(workLog.type),
               amount: dto.cost,
               occurredDate: workLog.workDate,
@@ -56,7 +59,8 @@ export class WorkLogService {
       ...(query.fieldId ? { fieldId: query.fieldId } : {}),
       ...(query.cropSeasonId ? { cropSeasonId: query.cropSeasonId } : {}),
       ...(query.keyword ? { workerName: { contains: query.keyword } } : {}),
-      ...this.farmScope()
+      ...this.farmScope(),
+      ...this.tenantWhere()
     };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.workLog.findMany({ where, skip, take, orderBy: { createdAt: 'desc' }, include: { field: true, cropSeason: true } }),
@@ -66,18 +70,22 @@ export class WorkLogService {
   }
 
   async findOne(id: string) {
-    const workLog = await this.prisma.workLog.findUnique({ where: { id }, include: { field: true, cropSeason: true } });
+    const workLog = await this.prisma.workLog.findFirst({ where: { id, ...this.tenantWhere() }, include: { field: true, cropSeason: true } });
     if (!workLog) {
       throw new NotFoundException('Work log not found');
     }
     return workLog;
   }
 
-  update(id: string, dto: UpdateWorkLogDto) {
+  async update(id: string, dto: UpdateWorkLogDto) {
+    await this.assertInScope(id);
+    if (dto.fieldId) await this.assertFieldInScope(dto.fieldId);
+    if (dto.cropSeasonId) await this.assertCropSeasonInScope(dto.cropSeasonId);
     return this.prisma.workLog.update({ where: { id }, data: this.toPrismaData(dto) });
   }
 
-  remove(id: string) {
+  async remove(id: string) {
+    await this.assertInScope(id);
     return this.prisma.workLog.delete({ where: { id } });
   }
 
@@ -110,5 +118,33 @@ export class WorkLogService {
   private farmScope() {
     const farmId = this.requestContextService.isPlatformAdmin() ? undefined : this.requestContextService.getFarmId();
     return farmId ? { field: { farmId } } : {};
+  }
+
+  private tenantWhere() {
+    if (this.requestContextService.isPlatformAdmin()) return {};
+    const tenantId = this.requestContextService.getTenantId();
+    return tenantId ? { tenantId } : { id: '__missing_tenant__' };
+  }
+
+  private tenantData() {
+    if (this.requestContextService.isPlatformAdmin()) return {};
+    return { tenantId: this.requestContextService.getTenantId() };
+  }
+
+  private async assertInScope(id: string) {
+    const item = await this.prisma.workLog.findFirst({ where: { id, ...this.tenantWhere() }, select: { id: true } });
+    if (!item) throw new NotFoundException('Work log not found');
+  }
+
+  private async assertFieldInScope(fieldId: string) {
+    if (this.requestContextService.isPlatformAdmin()) return;
+    const field = await this.prisma.field.findFirst({ where: { id: fieldId, tenantId: this.requestContextService.getTenantId() }, select: { id: true } });
+    if (!field) throw new NotFoundException('Field not found');
+  }
+
+  private async assertCropSeasonInScope(cropSeasonId: string) {
+    if (this.requestContextService.isPlatformAdmin()) return;
+    const cropSeason = await this.prisma.cropSeason.findFirst({ where: { id: cropSeasonId, tenantId: this.requestContextService.getTenantId() }, select: { id: true } });
+    if (!cropSeason) throw new NotFoundException('Crop season not found');
   }
 }

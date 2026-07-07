@@ -17,7 +17,8 @@ export class CropSeasonService {
   ) {}
 
   async create(dto: CreateCropSeasonDto) {
-    const cropSeason = await this.prisma.cropSeason.create({ data: this.toPrismaData(dto) as any });
+    await this.assertFieldInScope(dto.fieldId);
+    const cropSeason = await this.prisma.cropSeason.create({ data: { ...this.toPrismaData(dto), ...this.tenantData() } as any });
     await this.operationLogService.create({
       action: 'CREATE_CROP_SEASON',
       targetType: 'CROP_SEASON',
@@ -33,7 +34,7 @@ export class CropSeasonService {
     const where = {
       ...(query.fieldId ? { fieldId: query.fieldId } : {}),
       ...(query.keyword ? { cropName: { contains: query.keyword } } : {}),
-      ...this.farmScope()
+      ...this.tenantWhere()
     };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.cropSeason.findMany({ where, skip, take, orderBy: { createdAt: 'desc' }, include: { field: true } }),
@@ -43,8 +44,8 @@ export class CropSeasonService {
   }
 
   async findOne(id: string) {
-    const cropSeason = await this.prisma.cropSeason.findUnique({
-      where: { id },
+    const cropSeason = await this.prisma.cropSeason.findFirst({
+      where: { id, ...this.tenantWhere() },
       include: { field: true, farmInputs: true, workLogs: true, irrigationRecords: true, costRecords: true }
     });
     if (!cropSeason) {
@@ -53,11 +54,14 @@ export class CropSeasonService {
     return cropSeason;
   }
 
-  update(id: string, dto: UpdateCropSeasonDto) {
+  async update(id: string, dto: UpdateCropSeasonDto) {
+    await this.assertInScope(id);
+    if (dto.fieldId) await this.assertFieldInScope(dto.fieldId);
     return this.prisma.cropSeason.update({ where: { id }, data: this.toPrismaData(dto) as any });
   }
 
-  remove(id: string) {
+  async remove(id: string) {
+    await this.assertInScope(id);
     return this.prisma.cropSeason.delete({ where: { id } });
   }
 
@@ -77,8 +81,25 @@ export class CropSeasonService {
     });
   }
 
-  private farmScope() {
-    const farmId = this.requestContextService.isPlatformAdmin() ? undefined : this.requestContextService.getFarmId();
-    return farmId ? { field: { farmId } } : {};
+  private tenantWhere() {
+    if (this.requestContextService.isPlatformAdmin()) return {};
+    const tenantId = this.requestContextService.getTenantId();
+    return tenantId ? { tenantId } : { id: '__missing_tenant__' };
+  }
+
+  private tenantData() {
+    if (this.requestContextService.isPlatformAdmin()) return {};
+    return { tenantId: this.requestContextService.getTenantId() };
+  }
+
+  private async assertInScope(id: string) {
+    const item = await this.prisma.cropSeason.findFirst({ where: { id, ...this.tenantWhere() }, select: { id: true } });
+    if (!item) throw new NotFoundException('Crop season not found');
+  }
+
+  private async assertFieldInScope(fieldId: string) {
+    if (this.requestContextService.isPlatformAdmin()) return;
+    const field = await this.prisma.field.findFirst({ where: { id: fieldId, tenantId: this.requestContextService.getTenantId() }, select: { id: true } });
+    if (!field) throw new NotFoundException('Field not found');
   }
 }

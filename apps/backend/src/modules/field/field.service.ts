@@ -55,8 +55,8 @@ export class FieldService {
   }
 
   async findOne(id: string) {
-    const field = await this.prisma.field.findUnique({
-      where: { id },
+    const field = await this.prisma.field.findFirst({
+      where: { id, ...this.tenantWhere() },
       include: { farm: true, cropSeasons: true, devices: true }
     });
     if (!field) {
@@ -77,8 +77,8 @@ export class FieldService {
   }
 
   async getSummary(id: string) {
-    const field = await this.prisma.field.findUnique({
-      where: { id },
+    const field = await this.prisma.field.findFirst({
+      where: { id, ...this.tenantWhere() },
       include: {
         farm: true,
         devices: true,
@@ -137,8 +137,8 @@ export class FieldService {
   }
 
   async getRotationAdvice(id: string) {
-    const field = await this.prisma.field.findUnique({
-      where: { id },
+    const field = await this.prisma.field.findFirst({
+      where: { id, ...this.tenantWhere() },
       include: {
         cropSeasons: {
           orderBy: [{ year: 'desc' }, { createdAt: 'desc' }],
@@ -162,7 +162,7 @@ export class FieldService {
   }
 
   async getTimeline(id: string, query: ListQueryDto = {}) {
-    const field = await this.prisma.field.findUnique({ where: { id }, include: { farm: true } });
+    const field = await this.prisma.field.findFirst({ where: { id, ...this.tenantWhere() }, include: { farm: true } });
     if (!field) {
       throw new NotFoundException('Field not found');
     }
@@ -255,5 +255,11 @@ export class FieldService {
       select: { id: true }
     });
     if (!field) throw new NotFoundException('Field not found');
+  }
+
+  private tenantWhere() {
+    if (this.requestContextService.isPlatformAdmin()) return {};
+    const tenantId = this.requestContextService.getTenantId();
+    return tenantId ? { tenantId } : { id: '__missing_tenant__' };
   }
 }

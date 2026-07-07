@@ -20,8 +20,10 @@ export class IrrigationService {
     private readonly requestContextService: RequestContextService
   ) {}
 
-  create(dto: CreateIrrigationDto) {
-    return this.prisma.irrigationRecord.create({ data: this.toPrismaData(dto) as any });
+  async create(dto: CreateIrrigationDto) {
+    await this.assertFieldInScope(dto.fieldId);
+    if (dto.cropSeasonId) await this.assertCropSeasonInScope(dto.cropSeasonId);
+    return this.prisma.irrigationRecord.create({ data: { ...this.toPrismaData(dto), ...this.tenantData() } as any });
   }
 
   async findAll(query: ListQueryDto = {}) {
@@ -29,7 +31,8 @@ export class IrrigationService {
     const where = {
       ...(query.fieldId ? { fieldId: query.fieldId } : {}),
       ...(query.cropSeasonId ? { cropSeasonId: query.cropSeasonId } : {}),
-      ...this.farmScope()
+      ...this.farmScope(),
+      ...this.tenantWhere()
     };
     const include = { field: true, cropSeason: true, pumpDevice: true, valveDevice: true };
     const [items, total] = await this.prisma.$transaction([
@@ -40,8 +43,8 @@ export class IrrigationService {
   }
 
   async findOne(id: string) {
-    const irrigationRecord = await this.prisma.irrigationRecord.findUnique({
-      where: { id },
+    const irrigationRecord = await this.prisma.irrigationRecord.findFirst({
+      where: { id, ...this.tenantWhere() },
       include: { field: true, cropSeason: true, pumpDevice: true, valveDevice: true }
     });
     if (!irrigationRecord) {
@@ -50,19 +53,23 @@ export class IrrigationService {
     return irrigationRecord;
   }
 
-  update(id: string, dto: UpdateIrrigationDto) {
+  async update(id: string, dto: UpdateIrrigationDto) {
+    await this.assertInScope(id);
+    if (dto.fieldId) await this.assertFieldInScope(dto.fieldId);
+    if (dto.cropSeasonId) await this.assertCropSeasonInScope(dto.cropSeasonId);
     return this.prisma.irrigationRecord.update({ where: { id }, data: this.toPrismaData(dto) as any });
   }
 
-  remove(id: string) {
+  async remove(id: string) {
+    await this.assertInScope(id);
     return this.prisma.irrigationRecord.delete({ where: { id } });
   }
 
   async finish(id: string, dto: FinishIrrigationDto) {
     const irrigationRecord = await this.findOne(id);
-    let mqttResult: { topic: string; message: string } | null = null;
+    let mqttResult: { skipped: boolean; reason: string; deviceId?: string } | null = null;
     if (irrigationRecord.pumpDevice) {
-      mqttResult = this.mqttService.publishCommand({ deviceId: irrigationRecord.pumpDevice.code, command: 'PUMP_OFF' });
+      mqttResult = { skipped: true, reason: 'READ_ONLY_MODE', deviceId: irrigationRecord.pumpDevice.code };
     }
 
     const updated = await this.prisma.irrigationRecord.update({
@@ -97,9 +104,9 @@ export class IrrigationService {
 
   async cancel(id: string, dto: CancelIrrigationDto) {
     const irrigationRecord = await this.findOne(id);
-    let mqttResult: { topic: string; message: string } | null = null;
+    let mqttResult: { skipped: boolean; reason: string; deviceId?: string } | null = null;
     if (irrigationRecord.pumpDevice) {
-      mqttResult = this.mqttService.publishCommand({ deviceId: irrigationRecord.pumpDevice.code, command: 'PUMP_OFF' });
+      mqttResult = { skipped: true, reason: 'READ_ONLY_MODE', deviceId: irrigationRecord.pumpDevice.code };
     }
 
     const updated = await this.prisma.irrigationRecord.update({
@@ -142,5 +149,33 @@ export class IrrigationService {
   private farmScope() {
     const farmId = this.requestContextService.isPlatformAdmin() ? undefined : this.requestContextService.getFarmId();
     return farmId ? { field: { farmId } } : {};
+  }
+
+  private tenantWhere() {
+    if (this.requestContextService.isPlatformAdmin()) return {};
+    const tenantId = this.requestContextService.getTenantId();
+    return tenantId ? { tenantId } : { id: '__missing_tenant__' };
+  }
+
+  private tenantData() {
+    if (this.requestContextService.isPlatformAdmin()) return {};
+    return { tenantId: this.requestContextService.getTenantId() };
+  }
+
+  private async assertInScope(id: string) {
+    const item = await this.prisma.irrigationRecord.findFirst({ where: { id, ...this.tenantWhere() }, select: { id: true } });
+    if (!item) throw new NotFoundException('Irrigation record not found');
+  }
+
+  private async assertFieldInScope(fieldId: string) {
+    if (this.requestContextService.isPlatformAdmin()) return;
+    const field = await this.prisma.field.findFirst({ where: { id: fieldId, tenantId: this.requestContextService.getTenantId() }, select: { id: true } });
+    if (!field) throw new NotFoundException('Field not found');
+  }
+
+  private async assertCropSeasonInScope(cropSeasonId: string) {
+    if (this.requestContextService.isPlatformAdmin()) return;
+    const cropSeason = await this.prisma.cropSeason.findFirst({ where: { id: cropSeasonId, tenantId: this.requestContextService.getTenantId() }, select: { id: true } });
+    if (!cropSeason) throw new NotFoundException('Crop season not found');
   }
 }
