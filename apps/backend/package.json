@@ -20,7 +20,8 @@
     "sim:p13:valve:timeout": "node -e \"process.env.SCENARIO='timeout'; require('ts-node/register'); require('./scripts/simulators/valve-controller-simulator.ts')\"",
     "test:stage2": "node scripts/verify-stage2-auth.mjs",
     "test:stage3": "node scripts/verify-stage3-ops.mjs",
-    "test:stage4": "node scripts/verify-stage4-readonly-iot.mjs"
+    "test:stage4": "node scripts/verify-stage4-readonly-iot.mjs",
+    "test:security": "node scripts/verify-stage5-security-hardening.mjs"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
