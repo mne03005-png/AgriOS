@@ -1,0 +1,32 @@
+name: Backend Security Checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - security/stage5-auth-tenant-hardening
+
+jobs:
+  backend-security:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: mysql://agrios_test:agrios_test@127.0.0.1:3306/agrios_test
+      JWT_SECRET: ci-placeholder-secret
+      DEVICE_CONTROL_MODE: MOCK
+      DEVICE_CONTROL_DRY_RUN: "true"
+      VALVE_ALLOW_REAL_CONTROL: "false"
+      ENABLE_AUTO_EXECUTION: "false"
+      THINGSBOARD_WEBHOOK_SECRET: ci-placeholder-webhook-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm --prefix apps/backend run prisma:generate
+      - run: npx --prefix apps/backend prisma validate --schema apps/backend/prisma/schema.prisma
+      - run: npm --prefix apps/backend run build
+      - run: npm --prefix apps/backend run test:security
+      - run: npm --prefix apps/backend run test:stage4
