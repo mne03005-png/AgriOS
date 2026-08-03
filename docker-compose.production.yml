@@ -1,0 +1,152 @@
+name: agrios-production
+
+services:
+  agrios-mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - agrios_mysql_data:/var/lib/mysql
+    networks:
+      - agrios_internal
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+
+  agrios-redis:
+    image: redis:7.2.5-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
+    volumes:
+      - agrios_redis_data:/data
+    networks:
+      - agrios_internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
+  agrios-mosquitto:
+    image: eclipse-mosquitto:2.0.22
+    restart: unless-stopped
+    ports:
+      - "${MQTT_TLS_BIND_ADDRESS:-0.0.0.0}:${MQTT_TLS_PORT:-8883}:8883"
+    volumes:
+      - ./infra/mosquitto/mosquitto.production.conf:/mosquitto/config/mosquitto.conf:ro
+      - ${AGRIOS_SECRETS_DIR}/mosquitto:/mosquitto/secrets:rw
+      - agrios_mosquitto_data:/mosquitto/data
+    networks:
+      agrios_internal:
+        aliases:
+          - agrios-mqtt.xyzwtt.com
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_pub -h agrios-mqtt.xyzwtt.com -p 8883 --cafile /mosquitto/secrets/tls/fullchain.pem -u \"$${MQTT_USERNAME}\" -P \"$${MQTT_PASSWORD}\" -q 1 -t '$$CONTROL/dynamic-security/v1' -m '{\"commands\":[{\"command\":\"getClients\"}]}' >/dev/null"]
+      interval: 15s
+      timeout: 8s
+      retries: 10
+      start_period: 20s
+    environment:
+      MQTT_USERNAME: ${MQTT_USERNAME}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+    security_opt:
+      - no-new-privileges:true
+
+  agrios-api:
+    image: agrios-api:${AGRIOS_IMAGE_TAG:-production}
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      REDIS_HOST: agrios-redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      WEB_ORIGIN: ${CORS}
+      MQTT_ENABLED: "true"
+      MQTT_URL: ${MQTT_URL}
+      MQTT_CLIENT_ID: ${MQTT_CLIENT_ID:-agrios-api-production}
+      MQTT_USERNAME: ${MQTT_USERNAME}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+      DEVICE_OFFLINE_AFTER_SECONDS: ${DEVICE_OFFLINE_AFTER_SECONDS:-300}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6}
+      OPENAI_INPUT_COST_PER_MILLION: ${OPENAI_INPUT_COST_PER_MILLION:-0}
+      OPENAI_OUTPUT_COST_PER_MILLION: ${OPENAI_OUTPUT_COST_PER_MILLION:-0}
+      SPEECH_SERVICE_URL: ${SPEECH_SERVICE_URL:-http://127.0.0.1:8000}
+      NODE_EXTRA_CA_CERTS: /run/agrios-mqtt-ca/fullchain.pem
+    ports:
+      - "127.0.0.1:${AGRIOS_API_HOST_PORT:-3200}:3000"
+    volumes:
+      - ${AGRIOS_TLS_DIR}:/run/agrios-mqtt-ca:ro
+    networks:
+      - agrios_internal
+    depends_on:
+      agrios-mysql:
+        condition: service_healthy
+      agrios-redis:
+        condition: service_healthy
+      agrios-mosquitto:
+        condition: service_healthy
+    command: ["sh", "-c", "npx prisma migrate deploy --schema prisma/schema.prisma && exec node dist/src/main.js"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/v1/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+
+  agrios-web:
+    image: agrios-web:${AGRIOS_IMAGE_TAG:-production}
+    build:
+      context: .
+      dockerfile: apps/mobile/Dockerfile.production
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${AGRIOS_WEB_HOST_PORT:-3201}:80"
+    networks:
+      - agrios_internal
+    depends_on:
+      agrios-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  agrios_internal:
+    name: agrios-production-internal
+    driver: bridge
+
+volumes:
+  agrios_mysql_data:
+    name: agrios-production-mysql-data
+  agrios_redis_data:
+    name: agrios-production-redis-data
+  agrios_mosquitto_data:
+    name: agrios-production-mosquitto-data
