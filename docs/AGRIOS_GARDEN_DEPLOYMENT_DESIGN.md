@@ -132,3 +132,33 @@ GW ●───│ S-A1 ●   │ S-B1 ●   │ S-C1 ●   │ S-D1 ●   │ y
 - 传感器校准、绝缘/接地、泵阀、流量和急停测试记录。
 - MQTT 接入记录、Day0–Day7 Field Pilot 报告、异常工单和最终签字表。
 
+## 8. 野外无固定网络部署变体
+
+Phase27 小菜园与 300 亩基地共用 AgriOS Cloud、设备身份、MQTT v1 遥测主题和安全控制规则，仅替换现场通信与能源层。
+
+| 项目 | 小菜园 Wi-Fi 版本 | 300 亩 LoRa + 4G 版本 |
+|---|---|---|
+| 田间接入 | ESP32/Wi-Fi 或短距 LoRa | 470 MHz LoRaWAN/私有 LoRa，节点深睡眠 |
+| 上行网络 | 固定宽带/Wi-Fi，4G 备份 | 工业 4G/5G，双运营商 SIM；卫星仅作关键告警备份 |
+| Edge | 可选 Raspberry Pi/工业网关 | 必须具备本地数据库、规则引擎、看门狗和断网自治 |
+| 覆盖 | 单 AP，现场实测 | 主/备网关重叠覆盖，按最差 Zone 链路余量验收 |
+| 能源 | 市电优先，100–200 W 光伏验证 | 通信站 300 W + 25.6 V 100 Ah 起步；泵站独立核算 |
+| 失联行为 | 本地控制器安全关闭 | Gateway 缓存遥测、执行已批准本地规则、恢复后有序补传 |
+
+### 8.1 300 亩拓扑
+
+```mermaid
+flowchart BT
+  N["LoRa Sensor / Valve Node"] --> G1["主 Edge Gateway\nLoRa + 双 SIM 4G"]
+  N -. "重叠覆盖" .-> G2["备 Edge Gateway"]
+  G1 --> C["AgriOS Cloud MQTT/TLS"]
+  G2 --> C
+  G1 --> L["Local Cache + Rule Engine"]
+```
+
+- 现场节点不得直接向 Cloud 重复发布。Gateway 作为唯一桥接者，以 `deviceId + messageId` 保持 v1 去重语义。
+- 云端继续使用 `agrios/{tenant}/{device}/telemetry|command|event`；Zone/Gateway 关系通过设备注册元数据解析，避免破坏 Phase19–27 客户端。
+- Gateway 内部 LoRa 主题和帧格式属于 Edge 域，不直接暴露到公网。未来主题版本升级必须采用新版本前缀并提供双读迁移期。
+- 无外网时允许采集、缓存、安全关闭和经签名批准的本地自动规则；用户远程查看与云端告警将在链路恢复后更新，现场声光告警继续工作。
+
+详细网络、离线和能源设计分别见 `AGRIOS_REMOTE_FIELD_NETWORK_DESIGN.md`、`AGRIOS_EDGE_OFFLINE_MODE.md` 和 `AGRIOS_SOLAR_POWER_DESIGN.md`。
