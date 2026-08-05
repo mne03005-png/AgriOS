@@ -20,25 +20,9 @@ async function bootstrap() {
   app.use(requestIdMiddleware);
   const requestContextService = app.get(RequestContextService);
   app.use((req: { headers: HeaderLike; requestId?: string }, _res: unknown, next: () => void) => {
-    const authHeader = req.headers.authorization;
-    const token = (Array.isArray(authHeader) ? authHeader[0] : authHeader)?.startsWith('Bearer ')
-      ? (Array.isArray(authHeader) ? authHeader[0] : authHeader)!.slice(7)
-      : null;
-    let jwtUser: { userId?: string; farmId?: string; tenantId?: string; role?: string } = {};
-    if (token) {
-      try {
-        const payload = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8')) as typeof jwtUser;
-        jwtUser = payload;
-      } catch {
-        jwtUser = {};
-      }
-    }
     requestContextService.run(
       {
-        userId: jwtUser.userId ?? getCurrentUserId(req.headers),
-        farmId: jwtUser.farmId,
-        tenantId: jwtUser.tenantId ?? (Array.isArray(req.headers['x-tenant-id']) ? req.headers['x-tenant-id'][0] : req.headers['x-tenant-id']),
-        role: jwtUser.role,
+        userId: getCurrentUserId(req.headers),
         requestId: req.requestId
       },
       next
@@ -60,8 +44,9 @@ async function bootstrap() {
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('AgriOS API')
-    .setDescription('县域农业数字化平台 API')
+    .setDescription('AgriOS county-level agricultural digitization platform API')
     .setVersion('V1')
+    .addBearerAuth()
     .build();
   const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, swaggerDocument);

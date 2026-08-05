@@ -3,6 +3,7 @@ import { ApiBadGatewayResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiOkRe
 import { ListQueryDto } from '../../common/dto/list-query.dto';
 import { TenantGuard } from '../../common/tenant/tenant.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Public } from '../auth/public.decorator';
 import { BatchDeadLetterRetryDto } from './dto/batch-dead-letter-retry.dto';
 import { BatchMarkDeadLetterResolvedDto } from './dto/batch-mark-dead-letter-resolved.dto';
 import { BindPlotDto } from './dto/bind-plot.dto';
@@ -31,6 +32,7 @@ export class IotController {
 
   @ApiOkResponse({ description: 'Receive ThingsBoard telemetry' })
   @ApiUnauthorizedResponse({ description: 'Invalid webhook credentials' })
+  @Public()
   @Post('thingsboard/telemetry')
   receiveThingsBoardTelemetry(
     @Headers('x-thingsboard-secret') secret: string | undefined,

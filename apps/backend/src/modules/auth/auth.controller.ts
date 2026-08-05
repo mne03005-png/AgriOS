@@ -5,6 +5,7 @@ import { AuthenticatedRequest, JwtAuthGuard } from './jwt-auth.guard';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { Public } from './public.decorator';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -13,6 +14,7 @@ export class AuthController {
 
   @ApiCreatedResponse({ description: '注册成功，返回 accessToken 和用户信息' })
   @ApiBadRequestResponse({ description: '账号已存在或请求参数错误' })
+  @Public()
   @Post('register')
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
@@ -20,6 +22,7 @@ export class AuthController {
 
   @ApiOkResponse({ description: '登录成功，返回 accessToken 和用户信息' })
   @ApiUnauthorizedResponse({ description: '账号或密码错误' })
+  @Public()
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);

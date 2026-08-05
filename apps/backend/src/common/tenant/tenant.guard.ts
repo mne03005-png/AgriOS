@@ -1,9 +1,13 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+import { RequestContextService } from '../request-context.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class TenantGuard implements CanActivate {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly requestContext: RequestContextService
+  ) {}
 
   async canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest();
@@ -13,23 +17,33 @@ export class TenantGuard implements CanActivate {
     const farmId = this.first(request.query?.farmId ?? request.body?.farmId ?? request.params?.farmId);
 
     if (!request.user) {
-      if (!requestedTenantId && (!farmId || farmId === 'demo')) return true;
-      throw new ForbiddenException('Unauthenticated access is limited to demo farm data');
+      throw new ForbiddenException('Authentication required');
     }
 
     if (this.isPlatformRole(role)) {
       if (requestedTenantId && requestedTenantId !== userTenantId) {
+        request.tenantId = requestedTenantId;
+        this.requestContext.setAuthContext({
+          userId: request.user.userId,
+          farmId: request.user.farmId,
+          tenantId: requestedTenantId,
+          role
+        });
         await this.audit(request, 'cross_tenant_access', { requestedTenantId, userTenantId });
       }
       return true;
     }
 
-    if (requestedTenantId && userTenantId && requestedTenantId !== userTenantId) {
+    if (!userTenantId) {
+      throw new ForbiddenException('Tenant context is required');
+    }
+
+    if (requestedTenantId && requestedTenantId !== userTenantId) {
       await this.audit(request, 'cross_tenant_denied', { requestedTenantId, userTenantId });
       throw new ForbiddenException('Tenant mismatch');
     }
 
-    if (farmId && userTenantId) {
+    if (farmId) {
       const farm = await this.prisma.farm.findFirst({ where: { id: farmId, tenantId: userTenantId }, select: { id: true } });
       if (!farm) {
         await this.audit(request, 'cross_farm_denied', { farmId, userTenantId });
@@ -37,6 +51,7 @@ export class TenantGuard implements CanActivate {
       }
     }
 
+    request.tenantId = userTenantId;
     return true;
   }
 

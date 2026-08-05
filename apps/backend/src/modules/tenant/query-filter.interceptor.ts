@@ -5,9 +5,9 @@ import { Observable } from 'rxjs';
 export class QueryFilterInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest();
-    const tenantId = request?.tenantId ?? request?.headers?.['x-tenant-id'];
+    const tenantId = request?.user?.tenantId;
     if (tenantId) {
-      request.tenantFilter = { tenantId: Array.isArray(tenantId) ? tenantId[0] : tenantId };
+      request.tenantFilter = { tenantId };
     }
     return next.handle();
   }

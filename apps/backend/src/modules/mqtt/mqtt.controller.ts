@@ -1,13 +1,10 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, GoneException, Post } from '@nestjs/common';
 import { DeviceCommandDto } from './dto/device-command.dto';
-import { MqttService } from './mqtt.service';
 
 @Controller('mqtt')
 export class MqttController {
-  constructor(private readonly mqttService: MqttService) {}
-
   @Post('commands')
-  publishCommand(@Body() dto: DeviceCommandDto) {
-    return this.mqttService.publishCommand(dto);
+  publishCommand(@Body() _dto: DeviceCommandDto) {
+    throw new GoneException('Direct MQTT command endpoint is disabled. Use the protected device-control API.');
   }
 }

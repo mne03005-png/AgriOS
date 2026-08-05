@@ -17,6 +17,15 @@ export class RequestContextService {
     this.storage.run(context, callback);
   }
 
+  setAuthContext(context: Pick<RequestContext, 'userId' | 'farmId' | 'tenantId' | 'role'>) {
+    const store = this.storage.getStore();
+    if (!store) return;
+    store.userId = context.userId;
+    store.farmId = context.farmId;
+    store.tenantId = context.tenantId;
+    store.role = context.role;
+  }
+
   getUserId() {
     return this.storage.getStore()?.userId;
   }

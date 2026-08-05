@@ -17,14 +17,16 @@ export class FarmInputService {
   ) {}
 
   async create(dto: CreateFarmInputDto) {
+    await this.assertCropSeasonInScope(dto.cropSeasonId);
     return this.prisma.$transaction(async (tx: any) => {
-      const farmInput = await tx.farmInput.create({ data: this.toPrismaData(dto), include: { cropSeason: true } });
+      const farmInput = await tx.farmInput.create({ data: { ...this.toPrismaData(dto), ...this.tenantData() }, include: { cropSeason: true } });
       if (dto.totalPrice && dto.totalPrice > 0) {
         const existingCost = await tx.costRecord.findFirst({ where: { sourceRecordId: farmInput.id } });
         if (!existingCost) {
           await tx.costRecord.create({
             data: {
               cropSeasonId: farmInput.cropSeasonId,
+              tenantId: farmInput.tenantId,
               type: this.mapFarmInputCostType(farmInput.type),
               amount: dto.totalPrice,
               occurredDate: farmInput.purchaseDate ?? farmInput.usedDate ?? new Date(),
@@ -55,7 +57,8 @@ export class FarmInputService {
     const where = {
       ...(query.cropSeasonId ? { cropSeasonId: query.cropSeasonId } : {}),
       ...(query.keyword ? { name: { contains: query.keyword } } : {}),
-      ...this.farmScope()
+      ...this.farmScope(),
+      ...this.tenantWhere()
     };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.farmInput.findMany({ where, skip, take, orderBy: { createdAt: 'desc' }, include: { cropSeason: true } }),
@@ -65,18 +68,21 @@ export class FarmInputService {
   }
 
   async findOne(id: string) {
-    const farmInput = await this.prisma.farmInput.findUnique({ where: { id }, include: { cropSeason: true } });
+    const farmInput = await this.prisma.farmInput.findFirst({ where: { id, ...this.tenantWhere() }, include: { cropSeason: true } });
     if (!farmInput) {
       throw new NotFoundException('Farm input not found');
     }
     return farmInput;
   }
 
-  update(id: string, dto: UpdateFarmInputDto) {
+  async update(id: string, dto: UpdateFarmInputDto) {
+    await this.assertInScope(id);
+    if (dto.cropSeasonId) await this.assertCropSeasonInScope(dto.cropSeasonId);
     return this.prisma.farmInput.update({ where: { id }, data: this.toPrismaData(dto) });
   }
 
-  remove(id: string) {
+  async remove(id: string) {
+    await this.assertInScope(id);
     return this.prisma.farmInput.delete({ where: { id } });
   }
 
@@ -103,5 +109,27 @@ export class FarmInputService {
   private farmScope() {
     const farmId = this.requestContextService.isPlatformAdmin() ? undefined : this.requestContextService.getFarmId();
     return farmId ? { cropSeason: { field: { farmId } } } : {};
+  }
+
+  private tenantWhere() {
+    if (this.requestContextService.isPlatformAdmin()) return {};
+    const tenantId = this.requestContextService.getTenantId();
+    return tenantId ? { tenantId } : { id: '__missing_tenant__' };
+  }
+
+  private tenantData() {
+    if (this.requestContextService.isPlatformAdmin()) return {};
+    return { tenantId: this.requestContextService.getTenantId() };
+  }
+
+  private async assertInScope(id: string) {
+    const item = await this.prisma.farmInput.findFirst({ where: { id, ...this.tenantWhere() }, select: { id: true } });
+    if (!item) throw new NotFoundException('Farm input not found');
+  }
+
+  private async assertCropSeasonInScope(cropSeasonId: string) {
+    if (this.requestContextService.isPlatformAdmin()) return;
+    const cropSeason = await this.prisma.cropSeason.findFirst({ where: { id: cropSeasonId, tenantId: this.requestContextService.getTenantId() }, select: { id: true } });
+    if (!cropSeason) throw new NotFoundException('Crop season not found');
   }
 }

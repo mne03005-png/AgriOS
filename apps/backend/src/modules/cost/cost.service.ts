@@ -17,15 +17,17 @@ export class CostService {
     private readonly requestContextService: RequestContextService
   ) {}
 
-  create(dto: CreateCostDto) {
-    return this.prisma.costRecord.create({ data: this.toPrismaData(dto) as any });
+  async create(dto: CreateCostDto) {
+    await this.assertCropSeasonInScope(dto.cropSeasonId);
+    return this.prisma.costRecord.create({ data: { ...this.toPrismaData(dto), ...this.tenantData() } as any });
   }
 
   async findAll(query: ListQueryDto = {}) {
     const { page, pageSize, skip, take } = getPagination(query);
     const where = {
       ...(query.cropSeasonId ? { cropSeasonId: query.cropSeasonId } : {}),
-      ...this.farmScope()
+      ...this.farmScope(),
+      ...this.tenantWhere()
     };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.costRecord.findMany({ where, skip, take, orderBy: { occurredDate: 'desc' }, include: { cropSeason: true } }),
@@ -40,24 +42,27 @@ export class CostService {
   }
 
   async findOne(id: string) {
-    const costRecord = await this.prisma.costRecord.findUnique({ where: { id }, include: { cropSeason: true } });
+    const costRecord = await this.prisma.costRecord.findFirst({ where: { id, ...this.tenantWhere() }, include: { cropSeason: true } });
     if (!costRecord) {
       throw new NotFoundException('Cost record not found');
     }
     return costRecord;
   }
 
-  update(id: string, dto: UpdateCostDto) {
+  async update(id: string, dto: UpdateCostDto) {
+    await this.assertInScope(id);
+    if (dto.cropSeasonId) await this.assertCropSeasonInScope(dto.cropSeasonId);
     return this.prisma.costRecord.update({ where: { id }, data: this.toPrismaData(dto) as any });
   }
 
-  remove(id: string) {
+  async remove(id: string) {
+    await this.assertInScope(id);
     return this.prisma.costRecord.delete({ where: { id } });
   }
 
   async summaryBySeason(cropSeasonId: string) {
-    const cropSeason = await this.prisma.cropSeason.findUnique({
-      where: { id: cropSeasonId },
+    const cropSeason = await this.prisma.cropSeason.findFirst({
+      where: { id: cropSeasonId, ...this.tenantWhere() },
       include: { field: true }
     });
     if (!cropSeason) {
@@ -145,5 +150,27 @@ export class CostService {
       ...dto,
       occurredDate: dateOrUndefined(dto.occurredDate)
     });
+  }
+
+  private tenantWhere() {
+    if (this.requestContextService.isPlatformAdmin()) return {};
+    const tenantId = this.requestContextService.getTenantId();
+    return tenantId ? { tenantId } : { id: '__missing_tenant__' };
+  }
+
+  private tenantData() {
+    if (this.requestContextService.isPlatformAdmin()) return {};
+    return { tenantId: this.requestContextService.getTenantId() };
+  }
+
+  private async assertInScope(id: string) {
+    const item = await this.prisma.costRecord.findFirst({ where: { id, ...this.tenantWhere() }, select: { id: true } });
+    if (!item) throw new NotFoundException('Cost record not found');
+  }
+
+  private async assertCropSeasonInScope(cropSeasonId: string) {
+    if (this.requestContextService.isPlatformAdmin()) return;
+    const cropSeason = await this.prisma.cropSeason.findFirst({ where: { id: cropSeasonId, tenantId: this.requestContextService.getTenantId() }, select: { id: true } });
+    if (!cropSeason) throw new NotFoundException('Crop season not found');
   }
 }

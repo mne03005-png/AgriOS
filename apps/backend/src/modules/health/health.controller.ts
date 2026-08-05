@@ -1,18 +1,21 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { HealthService } from './health.service';
+import { Public } from '../auth/public.decorator';
 
 @ApiTags('P12 Health')
 @Controller('health')
 export class HealthController {
   constructor(private readonly health: HealthService) {}
 
+  @Public()
   @Get('live')
   @ApiOkResponse({ description: '进程存活检查' })
   live() {
     return this.health.live();
   }
 
+  @Public()
   @Get('ready')
   @ApiOkResponse({ description: '生产就绪检查' })
   ready() {

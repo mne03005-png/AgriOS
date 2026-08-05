@@ -1,108 +1,95 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { GoneException, Injectable, NotFoundException } from '@nestjs/common';
 import { ListQueryDto } from '../../common/dto/list-query.dto';
 import { getPagination, paginatedResult } from '../../common/pagination';
 import { dateOrUndefined, removeUndefined } from '../../common/prisma-data.helpers';
-import { MqttService } from '../mqtt/mqtt.service';
-import { OperationLogService } from '../operation-log/operation-log.service';
+import { TenantScopeService } from '../../common/tenant/tenant-scope.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { RequestContextService } from '../../common/request-context.service';
 import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
+
+const safeDeviceSelect = {
+  id: true,
+  tenantId: true,
+  fieldId: true,
+  field: true,
+  code: true,
+  name: true,
+  type: true,
+  thingsboardDeviceId: true,
+  iotStatus: true,
+  bindingSource: true,
+  mqttTopic: true,
+  online: true,
+  currentStatus: true,
+  lastReportedAt: true,
+  lastTelemetryAt: true,
+  remark: true,
+  createdAt: true,
+  updatedAt: true
+};
 
 @Injectable()
 export class DeviceService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly mqttService: MqttService,
-    private readonly operationLogService: OperationLogService,
-    private readonly requestContextService: RequestContextService
+    private readonly tenantScope: TenantScopeService
   ) {}
 
-  create(dto: CreateDeviceDto) {
-    return this.prisma.device.create({ data: this.toPrismaData(dto) as any });
+  async create(dto: CreateDeviceDto) {
+    await this.assertFieldInScope(dto.fieldId);
+    return this.prisma.device.create({ data: this.tenantScope.createData(this.toPrismaData(dto)) as any, select: safeDeviceSelect });
   }
 
   async findAll(query: ListQueryDto = {}) {
     const { page, pageSize, skip, take } = getPagination(query);
-    const where = {
+    const where = this.tenantScope.where({
       ...(query.fieldId ? { fieldId: query.fieldId } : {}),
-      ...(query.keyword ? { OR: [{ name: { contains: query.keyword } }, { code: { contains: query.keyword } }] } : {}),
-      ...this.farmScope()
-    };
+      ...(query.keyword ? { OR: [{ name: { contains: query.keyword } }, { code: { contains: query.keyword } }] } : {})
+    });
     const [items, total] = await this.prisma.$transaction([
-      this.prisma.device.findMany({ where, skip, take, orderBy: { createdAt: 'desc' }, include: { field: true } }),
+      this.prisma.device.findMany({ where, skip, take, orderBy: { createdAt: 'desc' }, select: safeDeviceSelect }),
       this.prisma.device.count({ where })
     ]);
     return paginatedResult(items, page, pageSize, total);
   }
 
-  private farmScope() {
-    const farmId = this.requestContextService.isPlatformAdmin() ? undefined : this.requestContextService.getFarmId();
-    return farmId ? { field: { farmId } } : {};
-  }
-
   async findOne(id: string) {
-    const device = await this.prisma.device.findUnique({ where: { id }, include: { field: true, sensorRecords: true } });
-    if (!device) {
-      throw new NotFoundException('Device not found');
-    }
+    const device = await this.prisma.device.findFirst({ where: this.tenantScope.where({ id }), select: safeDeviceSelect });
+    if (!device) throw new NotFoundException('Device not found');
     return device;
   }
 
-  update(id: string, dto: UpdateDeviceDto) {
-    return this.prisma.device.update({ where: { id }, data: this.toPrismaData(dto) as any });
+  async update(id: string, dto: UpdateDeviceDto) {
+    await this.assertDeviceInScope(id);
+    if (dto.fieldId) await this.assertFieldInScope(dto.fieldId);
+    return this.prisma.device.update({ where: { id }, data: this.toPrismaData(dto) as any, select: safeDeviceSelect });
   }
 
-  remove(id: string) {
-    return this.prisma.device.delete({ where: { id } });
+  async remove(id: string) {
+    await this.assertDeviceInScope(id);
+    return this.prisma.device.delete({ where: { id }, select: safeDeviceSelect });
   }
 
-  async sendCommand(id: string, command: 'PUMP_ON' | 'PUMP_OFF' | 'VALVE_OPEN' | 'VALVE_CLOSE') {
-    const device = await this.prisma.device.findUnique({ where: { id } });
-    if (!device) {
-      throw new NotFoundException('Device not found');
-    }
+  sendCommand(_id?: string, _command?: string) {
+    throw new GoneException('Legacy device command endpoint is disabled. Use the protected device-control API.');
+  }
 
-    const requestId = randomUUID();
-    const topic = `agrios/device/${device.code}/command`;
-    const deviceCommand = await (this.prisma as any).deviceCommand.create({
-      data: {
-        deviceId: device.id,
-        command,
-        payload: { command, requestId },
-        status: 'PENDING',
-        mqttTopic: topic,
-        requestId
-      }
-    });
+  private async assertDeviceInScope(id: string) {
+    const device = await this.prisma.device.findFirst({ where: this.tenantScope.where({ id }), select: { id: true } });
+    if (!device) throw new NotFoundException('Device not found');
+  }
 
-    const result = this.mqttService.publishCommand({ deviceId: device.code, command, requestId });
-    const sentCommand = await (this.prisma as any).deviceCommand.update({
-      where: { id: deviceCommand.id },
-      data: { status: 'SENT', sentAt: new Date() }
-    });
-
-    await this.operationLogService.create({
-      action: 'SEND_DEVICE_COMMAND',
-      targetType: 'DEVICE',
-      targetId: device.id,
-      description: `下发设备指令：${command}`,
-      metadata: { fieldId: device.fieldId, deviceCode: device.code, command, requestId, deviceCommandId: deviceCommand.id }
-    });
-
-    return {
-      device,
-      deviceCommand: sentCommand,
-      command,
-      result
-    };
+  private async assertFieldInScope(fieldId?: string | null) {
+    if (!fieldId) return;
+    const field = await this.prisma.field.findFirst({ where: this.tenantScope.where({ id: fieldId }), select: { id: true } });
+    if (!field) throw new NotFoundException('Field not found');
   }
 
   private toPrismaData(dto: CreateDeviceDto | UpdateDeviceDto) {
+    const { tenantId: _tenantId, thingsboardAccessToken: _thingsboardAccessToken, ...input } = dto as any;
     return removeUndefined({
-      ...dto,
-      lastReportedAt: dateOrUndefined(dto.lastReportedAt)
+      ...input,
+      lastReportedAt: dateOrUndefined(input.lastReportedAt)
     });
   }
 }

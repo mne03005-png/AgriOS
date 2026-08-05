@@ -2,5 +2,5 @@ import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
 export const TenantId = createParamDecorator((_data: unknown, ctx: ExecutionContext) => {
   const request = ctx.switchToHttp().getRequest();
-  return request.user?.tenantId ?? request.tenantId ?? request.headers?.['x-tenant-id'];
+  return request.user?.tenantId ?? request.tenantId;
 });

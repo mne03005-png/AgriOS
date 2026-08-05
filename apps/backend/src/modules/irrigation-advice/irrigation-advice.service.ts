@@ -94,7 +94,7 @@ export class IrrigationAdviceService {
       throw new NotFoundException('Pump device not found');
     }
 
-    const mqttResult = this.mqttService.publishCommand({ deviceId: pumpDevice.code, command: dto.command });
+    const mqttResult = { skipped: true, reason: 'READ_ONLY_MODE', deviceId: pumpDevice.code, command: dto.command };
     const [updatedAdvice, irrigationRecord] = await this.prisma.$transaction([
       this.prisma.irrigationAdvice.update({ where: { id }, data: { status: 'EXECUTED' } }),
       this.prisma.irrigationRecord.create({

@@ -197,8 +197,15 @@ export class AuthService {
     };
   }
 
-  private safeUser(user: SafeUser & { passwordHash?: string | null }) {
-    const { passwordHash: _passwordHash, tokenVersion: _tokenVersion, ...safeUser } = user;
+  private safeUser(user: SafeUser & { passwordHash?: string | null; failedLoginCount?: number; lockedUntil?: Date | null; passwordChangedAt?: Date | null }) {
+    const {
+      passwordHash: _passwordHash,
+      tokenVersion: _tokenVersion,
+      failedLoginCount: _failedLoginCount,
+      lockedUntil: _lockedUntil,
+      passwordChangedAt: _passwordChangedAt,
+      ...safeUser
+    } = user;
     return safeUser;
   }
 }
