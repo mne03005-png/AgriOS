@@ -1,6 +1,8 @@
 import { authStore } from '../stores/auth.store';
+import type { DataEnvelope } from '../services/data-state';
+import { mockAllowed } from '../services/data-state';
 
-export type ApiResult<T> = { data: T; isMock: boolean; error?: string; path?: string; status?: number };
+export type ApiResult<T> = DataEnvelope<T>;
 
 const env = import.meta.env as Record<string, string | undefined>;
 
@@ -21,7 +23,10 @@ function resolveAuthToken() {
   return null;
 }
 
-export async function request<T>(path: string, options: RequestInit = {}, fallback: T): Promise<ApiResult<T>> {
+export async function request<T>(path: string, options: RequestInit = {}, fallback?: T): Promise<ApiResult<T>> {
+  if ((options.method ?? 'GET').toUpperCase() !== 'GET' && typeof navigator !== 'undefined' && !navigator.onLine) {
+    return { data: null as T, source: 'NONE', status: 'OFFLINE', lastUpdatedAt: null, freshness: 'UNKNOWN', errorCode: 'OFFLINE_COMMAND_BLOCKED', errorMessage: '当前离线，写入或设备命令未提交。', retryable: true, isMock: false, path };
+  }
   try {
     const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
     const authToken = resolveAuthToken();
@@ -46,7 +51,8 @@ export async function request<T>(path: string, options: RequestInit = {}, fallba
       throw error;
     }
     const body = await response.json();
-    return { data: body.data ?? body, isMock: false };
+    const data = body.data ?? body;
+    return { data, source: 'LIVE', status: data == null || (Array.isArray(data) && !data.length) ? 'EMPTY' : 'LIVE', lastUpdatedAt: new Date().toISOString(), freshness: 'CURRENT', errorCode: null, errorMessage: null, retryable: false, isMock: false, path };
   } catch (error) {
     if ((error as any)?.status === 401) {
       authStore.clear();
@@ -56,6 +62,11 @@ export async function request<T>(path: string, options: RequestInit = {}, fallba
         window.location.assign(`${loginPath}?redirect=${encodeURIComponent(redirect)}`);
       }
     }
-    return { data: fallback, isMock: true, path, status: (error as any)?.status, error: error instanceof Error ? error.message : String(error) };
+    const message = error instanceof Error ? error.message : String(error);
+    if (mockAllowed() && fallback !== undefined) {
+      return { data: fallback, source: 'MOCK', status: 'MOCK', lastUpdatedAt: null, freshness: 'UNKNOWN', errorCode: 'MOCK_FALLBACK', errorMessage: message, retryable: true, isMock: true, path, httpStatus: (error as any)?.status, error: message };
+    }
+    const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+    return { data: null as T, source: 'NONE', status: offline ? 'OFFLINE' : 'ERROR', lastUpdatedAt: null, freshness: 'UNKNOWN', errorCode: offline ? 'OFFLINE' : `HTTP_${(error as any)?.status ?? 'NETWORK'}`, errorMessage: message, retryable: true, isMock: false, path, httpStatus: (error as any)?.status, error: message };
   }
 }

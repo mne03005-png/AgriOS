@@ -8,12 +8,5 @@
 </template>
 
 <script setup lang="ts">
-const tabs = [
-  { path: '/cockpit', label: 'Cockpit', icon: 'C' },
-  { path: '/map', label: 'Map', icon: 'M' },
-  { path: '/operations', label: 'Ops', icon: 'O' },
-  { path: '/drone-operations', label: 'Drone', icon: 'D' },
-  { path: '/ai', label: 'AI', icon: 'A' },
-  { path: '/profile', label: 'Me', icon: 'P' }
-];
+import { primaryNavigation as tabs } from '../../config/navigation';
 </script>

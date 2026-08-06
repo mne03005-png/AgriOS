@@ -102,25 +102,28 @@ export function getValveCommands(deviceId = 'demo-valve-001') {
   return request(`/device-control/valves/${deviceId}/commands`, {}, []);
 }
 
-export function postValveTestOpen(deviceId = 'demo-valve-001', testDurationSeconds = 3) {
+export function postValveTestOpen(deviceId = 'demo-valve-001', testDurationSeconds = 3, reason = '', reauthToken = '') {
   return request(`/device-control/valves/${deviceId}/test-open`, {
     method: 'POST',
-    body: JSON.stringify({ dryRun: true, testDurationSeconds })
-  }, { commandId: 'fallback-dry-run', dryRun: true, safety: { allowed: true }, ack: { status: 'ACKED' } });
+    headers: { 'X-Reauth-Token': reauthToken },
+    body: JSON.stringify({ dryRun: true, testDurationSeconds, reason })
+  });
 }
 
-export function postValveClose(deviceId = 'demo-valve-001') {
+export function postValveClose(deviceId = 'demo-valve-001', reason = '', reauthToken = '') {
   return request(`/device-control/valves/${deviceId}/close`, {
     method: 'POST',
-    body: JSON.stringify({ dryRun: true })
-  }, { commandId: 'fallback-close', dryRun: true, safety: { allowed: true }, ack: { status: 'ACKED' } });
+    headers: { 'X-Reauth-Token': reauthToken },
+    body: JSON.stringify({ dryRun: true, reason })
+  });
 }
 
-export function postValveSetOpening(deviceId = 'demo-valve-001', openingPercent = 5) {
+export function postValveSetOpening(deviceId = 'demo-valve-001', openingPercent = 5, reason = '', reauthToken = '') {
   return request(`/device-control/valves/${deviceId}/set-opening`, {
     method: 'POST',
-    body: JSON.stringify({ dryRun: true, openingPercent })
-  }, { commandId: 'fallback-set-opening', dryRun: true, safety: { allowed: true }, ack: { status: 'ACKED' } });
+    headers: { 'X-Reauth-Token': reauthToken },
+    body: JSON.stringify({ dryRun: true, openingPercent, reason })
+  });
 }
 
 export function getActionQueueJobs(farmId = defaultFarmId) {

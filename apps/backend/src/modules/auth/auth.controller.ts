@@ -5,6 +5,8 @@ import { AuthenticatedRequest, JwtAuthGuard } from './jwt-auth.guard';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { ReauthenticateDto } from './dto/reauthenticate.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -23,6 +25,13 @@ export class AuthController {
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  @ApiOkResponse({ description: 'Refresh token rotated and a fresh token pair returned' })
+  @ApiUnauthorizedResponse({ description: 'Refresh token is invalid, expired, or already rotated' })
+  @Post('refresh')
+  refresh(@Body() dto: RefreshTokenDto) {
+    return this.authService.refresh(dto.refreshToken);
   }
 
   @ApiOkResponse({ description: '当前用户、租户与角色' })
@@ -54,5 +63,11 @@ export class AuthController {
   @Post('logout')
   logout(@Req() req: AuthenticatedRequest) {
     return this.authService.logout(req.user!.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('reauthenticate')
+  reauthenticate(@Req() req: AuthenticatedRequest, @Body() dto: ReauthenticateDto) {
+    return this.authService.reauthenticate(req.user!.userId, dto);
   }
 }

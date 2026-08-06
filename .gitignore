@@ -8,3 +8,18 @@ Thumbs.db
 uploads/
 models/
 secrets/
+
+# Local operational data and credentials must never be committed.
+backups/
+*.bak
+*.dump
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# SQL migrations are source; ad-hoc database exports are not.
+*.sql
+!apps/backend/prisma/migrations/**/migration.sql

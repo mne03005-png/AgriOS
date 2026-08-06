@@ -1,0 +1,10 @@
+{
+  "name": "AgriOS 农业现场管理与智能灌溉",
+  "short_name": "AgriOS",
+  "start_url": "./cockpit",
+  "scope": "./",
+  "display": "standalone",
+  "theme_color": "#14532d",
+  "background_color": "#f4f7f2",
+  "icons": [{ "src": "agrios-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

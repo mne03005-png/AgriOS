@@ -18,6 +18,11 @@ export class TenantGuard implements CanActivate {
     }
 
     if (this.isPlatformRole(role)) {
+      const platformContext = this.first(request.headers?.['x-platform-context']);
+      if (requestedTenantId && requestedTenantId !== userTenantId && platformContext !== 'true') {
+        await this.audit(request, 'cross_tenant_denied', { requestedTenantId, reason: 'platform_context_required' });
+        throw new ForbiddenException('Explicit platform management context is required');
+      }
       if (requestedTenantId && requestedTenantId !== userTenantId) {
         await this.audit(request, 'cross_tenant_access', { requestedTenantId, userTenantId });
       }

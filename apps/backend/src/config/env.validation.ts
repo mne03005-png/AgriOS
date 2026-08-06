@@ -14,6 +14,15 @@ export function validateEnv(config: Env) {
   if (nodeEnv === 'production' && !config.JWT_SECRET) {
     errors.push('JWT_SECRET is required in production');
   }
+  if (nodeEnv === 'production' && !config.JWT_REFRESH_SECRET) {
+    errors.push('JWT_REFRESH_SECRET is required in production');
+  }
+  if (nodeEnv === 'production' && config.JWT_REFRESH_SECRET === config.JWT_SECRET) {
+    errors.push('JWT_REFRESH_SECRET must differ from JWT_SECRET in production');
+  }
+  if (nodeEnv === 'production' && (!config.DEVICE_ACK_HMAC_SECRET || config.DEVICE_ACK_HMAC_SECRET.length < 32)) {
+    errors.push('DEVICE_ACK_HMAC_SECRET must contain at least 32 characters in production');
+  }
 
   if (config.DEVICE_CONTROL_MODE && !deviceModes.has(config.DEVICE_CONTROL_MODE)) {
     errors.push('DEVICE_CONTROL_MODE must be one of MOCK, THINGSBOARD_CLOUD, MQTT_DIRECT, EDGE_HTTP, PLC_GATEWAY, BLUETOOTH_LOCAL');
@@ -52,6 +61,8 @@ export function validateEnv(config: Env) {
     ...config,
     NODE_ENV: nodeEnv,
     JWT_EXPIRES_IN: config.JWT_EXPIRES_IN ?? '7d',
+    JWT_REFRESH_EXPIRES_IN: config.JWT_REFRESH_EXPIRES_IN ?? '7d',
+    DEVICE_ACK_HMAC_TOLERANCE_SECONDS: config.DEVICE_ACK_HMAC_TOLERANCE_SECONDS ?? '300',
     ENABLE_AUTO_EXECUTION: config.ENABLE_AUTO_EXECUTION ?? 'false',
     DEVICE_CONTROL_MODE: config.DEVICE_CONTROL_MODE ?? 'MOCK',
     DEVICE_CONTROL_DRY_RUN: config.DEVICE_CONTROL_DRY_RUN ?? 'true',

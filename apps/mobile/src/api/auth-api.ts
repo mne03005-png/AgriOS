@@ -8,6 +8,9 @@ export type AuthUser = {
   phone?: string;
   email?: string | null;
   role: string;
+  canonicalRole?: 'FARMER' | 'MANAGER' | 'INSTALLER' | 'ENGINEER' | 'SUPER_ADMIN';
+  legacyRole?: string | null;
+  effectivePermissions?: string[];
 };
 
 export type AuthResponse = {

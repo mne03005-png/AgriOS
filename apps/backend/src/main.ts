@@ -12,7 +12,7 @@ import { QueryFilterInterceptor } from './modules/tenant/query-filter.intercepto
 import { PrismaService } from './prisma/prisma.service';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   app.setGlobalPrefix('api/v1');
   app.enableCors({
     origin: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',').map((item) => item.trim()) : true

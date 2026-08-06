@@ -74,6 +74,7 @@
 import { computed, onMounted, ref } from 'vue';
 import DemoHeader from '../components/common/DemoHeader.vue';
 import { authStore } from '../stores/auth.store';
+import { requestDangerousConfirmation } from '../services/dangerous-operation';
 import {
   getHealthReady,
   getValveCommands,
@@ -112,19 +113,25 @@ async function refresh() {
 }
 
 async function runTestOpen() {
-  const result = await postValveTestOpen(demoValveId, 3);
+  const confirmation = requestDangerousConfirmation('VALVE_OPEN', demoValveId, authStore.user?.farmId ?? '未选择', '未指定');
+  if (!confirmation.ok) { lastResult.value = { status: 'BLOCKED', error: confirmation.error }; return; }
+  const result = await postValveTestOpen(demoValveId, 3, confirmation.reason, confirmation.reauthToken);
   lastResult.value = result.data;
   await refresh();
 }
 
 async function runClose() {
-  const result = await postValveClose(demoValveId);
+  const confirmation = requestDangerousConfirmation('VALVE_CLOSE', demoValveId, authStore.user?.farmId ?? '未选择', '未指定');
+  if (!confirmation.ok) { lastResult.value = { status: 'BLOCKED', error: confirmation.error }; return; }
+  const result = await postValveClose(demoValveId, confirmation.reason, confirmation.reauthToken);
   lastResult.value = result.data;
   await refresh();
 }
 
 async function runSetOpening() {
-  const result = await postValveSetOpening(demoValveId, 5);
+  const confirmation = requestDangerousConfirmation('VALVE_OPEN', demoValveId, authStore.user?.farmId ?? '未选择', '未指定');
+  if (!confirmation.ok) { lastResult.value = { status: 'BLOCKED', error: confirmation.error }; return; }
+  const result = await postValveSetOpening(demoValveId, 5, confirmation.reason, confirmation.reauthToken);
   lastResult.value = result.data;
   await refresh();
 }

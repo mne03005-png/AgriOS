@@ -169,6 +169,7 @@ onMounted(async () => {
   fallbackFlags.value = results.map((item) => item.isMock);
   apiErrors.value = results
     .filter((item) => item.isMock && item.error)
+    // Authorization failures are carried separately from the normalized data state.
     .map((item) => `${item.path ?? 'API'}: ${item.error}${item.status === 401 || item.status === 403 ? '。请登录具备权限的账号。' : ''}`);
 });
 

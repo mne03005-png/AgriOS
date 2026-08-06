@@ -22,6 +22,11 @@ export const PERMISSIONS = {
   TENANT_MANAGE: 'tenant.manage',
   USER_MANAGE: 'user.manage',
   EMERGENCY_STOP: 'emergency.stop'
+  ,PLATFORM_CONTEXT: 'platform.context'
+  ,INTEGRATION_READ: 'integration.read'
+  ,DIAGNOSTICS_READ: 'diagnostics.read'
+  ,USER_DISABLE: 'user.disable'
+  ,DEVICE_DISABLE: 'device.disable'
 } as const;
 
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

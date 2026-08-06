@@ -1,0 +1,2 @@
+<template><section class="page"><h1>平台管理</h1><p class="subtle">跨租户操作必须显式进入平台上下文并写入审计。</p><div class="workspace-grid"><div v-for="item in items" :key="item.name" class="panel"><strong>{{ item.name }}</strong><span class="capability-state">{{ item.state }}</span></div></div></section></template>
+<script setup lang="ts">const items=[{name:'平台健康',state:'PARTIAL'},{name:'关键告警',state:'PARTIAL'},{name:'租户与用户',state:'PARTIAL'},{name:'设备总览',state:'PARTIAL'},{name:'集成状态',state:'BLOCKED_BY_CONFIG'},{name:'审计摘要',state:'PARTIAL'},{name:'高风险审批',state:'PARTIAL'}];</script>

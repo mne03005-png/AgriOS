@@ -8,6 +8,7 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "verify:prod-mobile": "node scripts/verify-prod-mobile.mjs"
+    ,"test:phase-a": "node scripts/verify-phase-a-frontend.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-vue": "^6.0.0",

@@ -1,11 +1,14 @@
 import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { roleIdentity } from '../../common/permissions/canonical-role';
+import { ReauthenticateDto } from './dto/reauthenticate.dto';
 
 type SafeUser = {
   id: string;
@@ -29,7 +32,8 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly config: ConfigService
   ) {}
 
   async register(dto: RegisterDto) {
@@ -146,6 +150,31 @@ export class AuthService {
     return this.buildAuthResponse(updated);
   }
 
+  async refresh(refreshToken: string) {
+    let payload: { userId?: string; tokenVersion?: number; tokenType?: string };
+    try {
+      payload = this.jwtService.verify(refreshToken, { secret: this.refreshSecret() });
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    if (!payload.userId || payload.tokenType !== 'refresh') {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { id: payload.userId }, include: { farm: true } });
+    if (!user || user.status === 'DISABLED' || user.tokenVersion !== (payload.tokenVersion ?? 0)) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const rotated = await this.prisma.user.update({
+      where: { id: user.id },
+      data: { tokenVersion: { increment: 1 } },
+      include: { farm: true }
+    });
+    await this.audit.record({ eventType: 'auth.refresh', severity: 'INFO', userId: rotated.id, tenantId: rotated.tenantId, entityType: 'User', entityId: rotated.id });
+    return this.buildAuthResponse(rotated);
+  }
+
   async logout(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true, tenantId: true } });
     if (user) {
@@ -163,6 +192,7 @@ export class AuthService {
       user: this.safeUser(user),
       tenant: user.tenantId ? await (this.prisma as any).tenant.findUnique({ where: { id: user.tenantId } }) : null,
       role: user.role
+      ,...roleIdentity(user.role)
     };
   }
 
@@ -184,21 +214,45 @@ export class AuthService {
   }
 
   private buildAuthResponse(user: SafeUser & { passwordHash?: string | null }) {
-    const accessToken = this.jwtService.sign({
+    const tokenPayload = {
       userId: user.id,
       tenantId: user.tenantId ?? undefined,
       farmId: user.farmId ?? undefined,
       role: user.role,
       tokenVersion: user.tokenVersion ?? 0
-    });
+    };
+    const accessToken = this.jwtService.sign({ ...tokenPayload, tokenType: 'access' });
+    const refreshToken = this.jwtService.sign(
+      { ...tokenPayload, tokenType: 'refresh' },
+      { secret: this.refreshSecret(), expiresIn: (this.config.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '7d') as any }
+    );
     return {
       accessToken,
+      refreshToken,
       user: this.safeUser(user)
+      ,...roleIdentity(user.role)
     };
+  }
+
+  async reauthenticate(userId: string, dto: ReauthenticateDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.status === 'DISABLED' || !user.passwordHash || !(await bcrypt.compare(dto.password, user.passwordHash))) {
+      await this.audit.record({ eventType: 'auth.reauthenticate.failed', severity: 'WARNING', userId, tenantId: user?.tenantId });
+      throw new UnauthorizedException('Re-authentication failed');
+    }
+    const reauthToken = this.jwtService.sign({ userId: user.id, tenantId: user.tenantId ?? undefined, tokenVersion: user.tokenVersion, tokenType: 'reauth' }, { expiresIn: '5m' });
+    await this.audit.record({ eventType: 'auth.reauthenticate', severity: 'INFO', userId, tenantId: user.tenantId });
+    return { reauthToken, expiresInSeconds: 300 };
+  }
+
+  private refreshSecret() {
+    const secret = this.config.get<string>('JWT_REFRESH_SECRET');
+    if (!secret) throw new Error('JWT_REFRESH_SECRET is required');
+    return secret;
   }
 
   private safeUser(user: SafeUser & { passwordHash?: string | null }) {
     const { passwordHash: _passwordHash, tokenVersion: _tokenVersion, ...safeUser } = user;
-    return safeUser;
+    return { ...safeUser, ...roleIdentity(user.role) };
   }
 }

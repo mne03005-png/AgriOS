@@ -5,6 +5,7 @@ export default () => ({
   redisUrl: process.env.REDIS_URL,
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
+  jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? '7d',
   enableAutoExecution: (process.env.ENABLE_AUTO_EXECUTION ?? 'false').toLowerCase() === 'true',
   deviceControlMode: process.env.DEVICE_CONTROL_MODE ?? 'MOCK',
   thingsboardBaseUrl: process.env.THINGSBOARD_BASE_URL ?? process.env.THINGSBOARD_URL,

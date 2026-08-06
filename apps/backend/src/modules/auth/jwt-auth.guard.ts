@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CanonicalRole, canonicalRoleFor, effectivePermissionsFor } from '../../common/permissions/canonical-role';
 
 export interface AuthenticatedRequest {
   headers: Record<string, string | string[] | undefined>;
@@ -9,6 +10,8 @@ export interface AuthenticatedRequest {
     tenantId?: string;
     farmId?: string;
     role: string;
+    canonicalRole?: CanonicalRole;
+    effectivePermissions?: string[];
     tokenVersion?: number;
   };
 }
@@ -47,6 +50,8 @@ export class JwtAuthGuard implements CanActivate {
       tenantId: user.tenantId ?? undefined,
       farmId: user.farmId ?? undefined,
       role: user.role,
+      canonicalRole: canonicalRoleFor(user.role),
+      effectivePermissions: effectivePermissionsFor(user.role),
       tokenVersion: user.tokenVersion
     };
     return true;

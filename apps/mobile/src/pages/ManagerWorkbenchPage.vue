@@ -1,0 +1,1 @@
+<template><section class="page"><h1>管理工作台</h1><p class="subtle">审批、成员、地块与 Zone、设备分配、报表和成本入口。</p><div class="workspace-grid"><RouterLink class="panel" to="/operations">作业与审批</RouterLink><RouterLink class="panel" to="/reports">报表</RouterLink><div class="panel empty-state">成员与 Zone 管理：NOT_IMPLEMENTED（Phase B）</div></div></section></template>
