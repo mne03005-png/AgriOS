@@ -11,6 +11,7 @@ import { ThingsboardDeviceController } from './adapters/thingsboard-device-contr
 import { EdgeHttpDeviceController } from './adapters/edge-http-device-controller';
 import { PlcGatewayDeviceController } from './adapters/plc-gateway-device-controller';
 import { BluetoothLocalDeviceController } from './adapters/bluetooth-local-device-controller';
+import { ModbusTcpTransport } from './transports/modbus-tcp.transport';
 
 @Module({
   imports: [AuditModule, AuthModule, DeviceModule],
@@ -23,7 +24,8 @@ import { BluetoothLocalDeviceController } from './adapters/bluetooth-local-devic
     ThingsboardDeviceController,
     EdgeHttpDeviceController,
     PlcGatewayDeviceController,
-    BluetoothLocalDeviceController
+    BluetoothLocalDeviceController,
+    ModbusTcpTransport
   ],
   exports: [DeviceControlService, ValveControlService]
 })

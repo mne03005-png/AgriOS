@@ -17,7 +17,7 @@ Phase27–30 曾规划 Milesight UR35、UG65-470M、UC300-470M、EM300-TH-470M�
 | 阀位反馈 | **型号未定**限位开关/辅助触点 | 开/关到位；通常干接点 | DI 上行 | 否 | 否 / 否 / 否 | 2 DI 推荐 | open/close 独立反馈 | 必须 / 必须 | 未定 | 缺触点类型、防护等级和接线图 |
 | 水泵 | **型号未定；台架禁止接大功率泵** | 输水；电源取决于泵曲线 | 由接触器/VFD控制 | 条件 | 否 | 间接 I/O | running/fault/flow/pressure | 指示灯模拟 / 必须 | 未完成水力选型 | 缺泵曲线、铭牌、启动电流和保护要求 |
 | 接触器或 VFD | 接触器：TeSys D + LRD（历史候选）；VFD 型号未定 | 隔离泵动力回路 | DI/DO；VFD 可 RS485 | 条件 | 否 | coil/start/stop，running/fault | 辅助触点或 Modbus | 继电器/灯模拟 / 现场泵需要 | 仅接触器系列候选 | exact current rating、coil、VFD map 均待确认 |
-| PLC / 控制器 | UC300-470M / Milesight；LOGO! 8.4 12/24RCE 为本地安全 PLC 候选 | I/O 汇聚和本地安全状态机；UC300 12–24 VDC（按官方 datasheet） | LoRaWAN 或 RS485；命令 downlink | UC300 支持 RS485 Modbus | UC300 是 / 否 / 依赖网关 | UC300 官方：4 DI、2 relay DO、6 AI、1 RS485、1 RS232 | DI/AI/RS485 + LoRaWAN ACK | 必须 / 必须 | 型号为历史明确候选，未有铭牌/固件 | UC300 产品页、datasheet、文档中心已核验；通信协议和订单 SKU 尚缺 |
+| PLC / 控制器 | **Siemens LOGO! 8.4 12/24RCE，6ED1052-1MD08-0BA2**；UC300-470M 仅保留抽象 | LOGO! 为第一套台架主 PLC；UC300 不开发专用 real transport | Edge→Modbus TCP→LOGO! | LOGO! Modbus TCP（地址待确认） | 否 | I/O 以 exact order code 官方手册为准 | DI/AI/Modbus readback | 必须 / 必须 | 主 PLC 型号已由项目确认；实物/固件未确认 | 缺铭牌、exact firmware、Soft Comfort project、Modbus access config、官方地址表 |
 | LoRaWAN Gateway | UG65 Global/CN470 配置 / Milesight | 8-channel LoRaWAN 汇聚；9–24 VDC/PoE（官方） | LoRaWAN↔MQTT(S)/HTTP(S) | 官方支持 Modbus 集成 | 是 / **是** / `CONDITIONAL` | 非现场 PLC I/O | MQTT PUBACK、设备状态 | 有 LoRa 节点时必需 / 必须 | 历史明确候选，频段/SKU/实物未确认 | 官方 datasheet 确认 embedded NS、MQTT(S)、HTTP(S) |
 | 4G Router | UR35 中国 LTE 版本 / Milesight | 现场 WAN 回传 | Ethernet↔LTE/VPN | 非本轮依赖 | 否 | 型号细分待确认 | 链路健康/双 SIM 状态 | 非必需 / 必须 | 历史候选，精确 SKU 未定 | 需中国版本 datasheet、频段、双 SIM 和供电手册 |
 | Edge Computer | Raspberry Pi 4B 4 GB + SSD（历史候选） | MQTT/缓存/适配；5 VDC | Ethernet；MQTT(S)/HTTP(S) | 通过软件条件支持 | 否 | USB/Ethernet；不直接承担安全 I/O | 服务健康/队列 | 可用开发机替代 / 现场建议必需 | 候选，未确认现有资产 | 官方硬件资料易得；需资产/电源/SSD确认 |
@@ -30,11 +30,10 @@ Phase27–30 曾规划 Milesight UR35、UG65-470M、UC300-470M、EM300-TH-470M�
 
 ## ChirpStack 判定
 
-当前结论：**CONDITIONAL**。
+当前结论：**P0 NOT REQUIRED**。
 
-- 若最终为支持 embedded Network Server、OTAA/ABP、device profile 和 MQTT(S) integration 的 UG65 版本：P0/单 Zone 阶段 `ChirpStack = NOT REQUIRED`。
-- 若最终网关仅运行 packet forwarder，或决定将 Network Server 独立托管：`ChirpStack = REQUIRED`。
-- 在 gateway exact SKU、固件和 MQTT API 验证前不得将 CONDITIONAL 改为最终结论。
+- 第一阶段已确定使用 UG65 CN470 Embedded Network Server + MQTT(S)，因此 `ChirpStack P0 = NOT REQUIRED`。
+- 若后续改为 packet forwarder 或独立托管 Network Server，再重新评估 ChirpStack；这不是 P0 前置条件。
 
 ## 未来 transport 边界
 
@@ -42,4 +41,4 @@ P0-1 的 `PlcControllerPort` 可以承载命令、安全结果和反馈，但真
 
 ## 冻结结论
 
-真实接线：**NO**。目前只允许购买安全低压台架元件并按厂家说明进行无负载验收；UC300/PLC、网关、传感器、阀和泵的 exact model/firmware/manual 尚未形成完整证据包。
+真实接线：**NO**。目前只允许购买安全低压台架元件并按厂家说明进行无负载验收；LOGO! 型号虽已确定，但铭牌、firmware、Soft Comfort project、Modbus access/address、网关、传感器、阀和泵的完整证据包尚未形成。

@@ -1,0 +1,23 @@
+{
+  "profile": "logo-8.4-6ED1052-1MD08-0BA2-unconfigured",
+  "vendor": "Siemens",
+  "model": "LOGO! 8.4 12/24RCE",
+  "orderNumber": "6ED1052-1MD08-0BA2",
+  "protocol": "MODBUS_TCP",
+  "unitId": null,
+  "points": {
+    "emergencyStop": { "type": "discreteInput", "address": null },
+    "noWater": { "type": "discreteInput", "address": null },
+    "valveOpenFeedback": { "type": "discreteInput", "address": null },
+    "valveCloseFeedback": { "type": "discreteInput", "address": null },
+    "pumpRunningFeedback": { "type": "discreteInput", "address": null },
+    "overloadTrip": { "type": "discreteInput", "address": null },
+    "valveOpen": { "type": "coil", "address": null },
+    "valveClose": { "type": "coil", "address": null },
+    "pumpStart": { "type": "coil", "address": null },
+    "pumpStop": { "type": "coil", "address": null },
+    "pressure": { "type": "inputRegister", "address": null, "scale": null },
+    "flowRate": { "type": "inputRegister", "address": null, "scale": null }
+  },
+  "note": "No Siemens Modbus address has been supplied or inferred. This profile must be rejected for real execution."
+}

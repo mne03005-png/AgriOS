@@ -4,8 +4,8 @@
 
 | 组件 | exact model / firmware | 必需资料 | 当前状态 | 解除条件 |
 |---|---|---|---|---|
-| PLC/UC300 | UC300-470M 候选；固件未知 | user guide、LoRaWAN communication protocol、Modbus/RS485说明、DI/DO/AI wiring、下行命令/ACK定义 | 部分官方系列资料已找到 | 订单 SKU、铭牌、固件与对应版本文档一致 |
-| 本地 PLC | LOGO! 8.4 12/24RCE 候选 | datasheet、manual、I/O wiring、Ethernet protocol、程序/版本管理 | 未收集到项目证据包 | exact order code 和签字安全程序确定 |
+| 主 PLC | Siemens LOGO! 8.4 12/24RCE，6ED1052-1MD08-0BA2；固件未知 | datasheet、manual、I/O wiring、Modbus TCP access/config/address、Soft Comfort project、程序版本管理 | 型号已确认；实物证据包缺失 | 铭牌、固件、工程文件和官方地址表一致 |
+| UC300 | UC300-470M abstraction only | 保留 user guide/protocol 资料 | P0 不开发 UC300-specific real transport | 后续若重新选为主控制器再评审 |
 | Gateway | UG65 中国频段候选；固件未知 | datasheet、user guide、CN470 channel plan、embedded NS、MQTT API、TLS、backup/restore | 官方系列资料已找到 | exact SKU/firmware 与现场功能逐项验证 |
 | 4G Router | UR35 中国 LTE 候选 | exact cellular SKU、频段、SIM/failover、VPN、供电与接地手册 | 官方 datasheet 已找到；项目 SKU 未确认 | 供应商书面确认中国网络兼容性 |
 | 土壤传感器 | LSE01-CN470-8 候选 | user guide、payload decoder、频段、量程、精度、电池、土壤校准 | 官方产品页、资料目录和校准资料已找到 | exact SKU 与 decoder 版本验证 |
@@ -29,7 +29,7 @@ UG65-470M/CN470、UC300-470M、LSE01-CN470-8、EM300-TH-470M、UR35 中国 LTE�
 
 ### C. 必须优先找手册
 
-UC300、UG65、UR35、LOGO!、最终压力/流量/液位传感器、阀、泵、接触器/VFD。没有官方 wiring/protocol/register map，不得接线或开发真实 transport。
+LOGO! 8.4 exact order code、UG65、UR35、最终压力/流量/液位传感器、阀、泵、接触器/VFD。没有官方 wiring/protocol/address map，不得真实接线或写 PLC。
 
 ### D. 必须采购的台架设备
 
@@ -41,11 +41,11 @@ UC300、UG65、UR35、LOGO!、最终压力/流量/液位传感器、阀、泵、
 
 ### F. 何时可开发真实 transport
 
-只有在 **UC300/PLC exact model + firmware + protocol guide + register/command map + wiring + ACK语义** 全部确认后，才能开发 `ModbusTcpTransport`、`ModbusRtuTransport` 或 `Uc300HttpTransport`。此前只允许 `FakePlcTransport`。
+通用 `ModbusTcpTransport` 可使用 localhost fake server 开发；只有在 **LOGO! 铭牌 + exact firmware + Soft Comfort project + Modbus access config + 官方地址表 + wiring/feedback语义** 全部确认后，才能创建真实 profile 并进入实机联调。P0 不开发 UC300-specific transport。
 
 ### G. ChirpStack
 
-`CONDITIONAL`：最终 UG65 确认使用 embedded Network Server + MQTT(S) 时不需要；仅 packet forwarder 时需要。
+`P0 NOT REQUIRED`：第一阶段确定使用 UG65 CN470 Embedded Network Server + MQTT(S)。
 
 ### H. 台架类别数量
 

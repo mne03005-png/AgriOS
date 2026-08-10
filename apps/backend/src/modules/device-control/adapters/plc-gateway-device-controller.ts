@@ -1,16 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DeviceControlPayload } from '../device-controller.interface';
 import { PlcCommandResult, PlcControlCommand, PlcControllerPort, PlcFeedback, PlcStatus } from '../plc-control.types';
+import { ModbusTcpTransport } from '../transports/modbus-tcp.transport';
 
-type PlcProfile = { unitId: number | null; registers: Record<string, number | null> };
+type PlcProfile = {
+  unitId: number | null;
+  registers?: Record<string, number | null>;
+  points?: Record<string, { type: string; address: number | null; scale?: number | null }>;
+};
 
 @Injectable()
 export class PlcGatewayDeviceController implements PlcControllerPort {
   private readonly results = new Map<string, PlcCommandResult>();
   private status: PlcStatus = { online: false, emergencyStop: false, noWater: false, pumpRunning: false, valveOpen: false };
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly config: ConfigService, @Optional() private readonly modbusTransport?: ModbusTcpTransport) {}
 
   async execute(command: PlcControlCommand): Promise<PlcCommandResult> {
     const previous = this.results.get(command.commandId);
@@ -43,6 +48,9 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
         status: 'SUCCEEDED', startedAt: now, completedAt: now, feedback: { fake: true, ...this.status }
       });
     }
+    if (this.config.get<string>('PLC_TRANSPORT') === 'MODBUS_TCP') {
+      return this.remember(command, await this.executeModbus(command));
+    }
     // Transport is intentionally absent until the commissioned profile and hardware protocol are approved.
     return this.remember(command, this.rejected(command, 'REJECTED', 'PLC_TRANSPORT_NOT_COMMISSIONED'));
   }
@@ -55,7 +63,13 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
       : this.execute({ ...commandOrDeviceId, action: 'EMERGENCY_STOP' });
   }
   async readStatus(_deviceId: string) { return { ...this.status }; }
-  async healthCheck() { return { healthy: this.status.online && this.profileConfigured(), reason: this.status.online ? 'PLC_PROFILE_UNCONFIGURED' : 'CONTROLLER_OFFLINE' }; }
+  async healthCheck() {
+    const transport = this.modbusTransport ? await this.modbusTransport.healthCheck() : undefined;
+    return {
+      healthy: this.status.online && this.profileConfigured() && (!transport || transport.connected),
+      reason: !this.status.online ? 'CONTROLLER_OFFLINE' : !this.profileConfigured() ? 'PLC_PROFILE_UNCONFIGURED' : transport && !transport.connected ? 'PLC_TRANSPORT_OFFLINE' : undefined
+    };
+  }
 
   async verifyFeedback(command: PlcControlCommand, feedback: PlcFeedback): Promise<PlcCommandResult> {
     if (feedback.commandId !== command.commandId || feedback.tenantId !== command.tenantId || feedback.farmId !== command.farmId || feedback.deviceId !== command.deviceId) {
@@ -99,7 +113,24 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
   }
   private profileConfigured() {
     const profile = this.config.get<PlcProfile>('PLC_PROFILE');
-    return Boolean(profile && Number.isInteger(profile.unitId) && Object.values(profile.registers ?? {}).every(Number.isInteger));
+    const addresses = profile?.points ? Object.values(profile.points).map((point) => point.address) : Object.values(profile?.registers ?? {});
+    return Boolean(profile && Number.isInteger(profile.unitId) && addresses.length > 0 && addresses.every(Number.isInteger));
+  }
+  private async executeModbus(command: PlcControlCommand): Promise<PlcCommandResult> {
+    if (!this.modbusTransport) return this.rejected(command, 'REJECTED', 'PLC_TRANSPORT_UNAVAILABLE');
+    const logicalPoint: Partial<Record<PlcControlCommand['action'], string>> = {
+      VALVE_OPEN: 'valveOpen', VALVE_CLOSE: 'valveClose', PUMP_ON: 'pumpStart', PUMP_OFF: 'pumpStop', EMERGENCY_STOP: 'pumpStop'
+    };
+    const pointName = logicalPoint[command.action];
+    const profile = this.config.get<PlcProfile>('PLC_PROFILE');
+    const point = pointName ? profile?.points?.[pointName] : undefined;
+    if (!point || !Number.isInteger(point.address)) return this.rejected(command, 'REJECTED', 'PLC_POINT_UNCONFIRMED');
+    const startedAt = new Date().toISOString();
+    await this.modbusTransport.writeCoil(point.address as number, true);
+    return {
+      commandId: command.commandId, accepted: true, executed: true, acknowledged: false,
+      status: 'ACK_PENDING', startedAt, feedback: { transport: 'MODBUS_TCP', logicalPoint: pointName }
+    };
   }
   private rejected(command: Pick<PlcControlCommand, 'commandId'>, status: PlcCommandResult['status'], errorCode: string): PlcCommandResult {
     return { commandId: command.commandId, accepted: false, executed: false, acknowledged: false, status, errorCode, completedAt: new Date().toISOString() };
