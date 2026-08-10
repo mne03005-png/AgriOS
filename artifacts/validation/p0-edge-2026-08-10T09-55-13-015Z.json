@@ -1,0 +1,159 @@
+{
+  "runId": "p0-edge-2026-08-10T09-55-13-015Z",
+  "gitCommit": "8edb38863726ab239184427480364b8b41dd0a74",
+  "branch": "feature/agrios-p0-edge-reliability",
+  "testCount": 32,
+  "passCount": 32,
+  "failCount": 0,
+  "telemetryGenerated": 1000,
+  "telemetryUploaded": 1000,
+  "uniqueStored": 1000,
+  "lostTelemetry": 0,
+  "duplicateTelemetry": 0,
+  "commandsReceived": 4,
+  "duplicateCommands": 1,
+  "duplicatePhysicalExecution": 0,
+  "acksGenerated": 3,
+  "acksUploaded": 3,
+  "lostAck": 0,
+  "expiredDangerousCommandExecuted": 0,
+  "unsafeStartAfterReconnect": 0,
+  "stopPriorityFailure": 0,
+  "restartRecovery": true,
+  "queuePeakDepth": 999,
+  "replayDurationMs": 17351,
+  "finalQueueDepth": 0,
+  "realHardwareUsed": false,
+  "realHardwareEnabled": false,
+  "overallResult": "PASS",
+  "tests": [
+    {
+      "name": "1 online telemetry",
+      "pass": true
+    },
+    {
+      "name": "2 offline telemetry caching 10",
+      "pass": true
+    },
+    {
+      "name": "3 offline telemetry caching 100",
+      "pass": true
+    },
+    {
+      "name": "4 offline telemetry caching 1000",
+      "pass": true
+    },
+    {
+      "name": "5 restart persistence",
+      "pass": true
+    },
+    {
+      "name": "6 batch replay",
+      "pass": true
+    },
+    {
+      "name": "7 restart during replay",
+      "pass": true
+    },
+    {
+      "name": "8 replay completes",
+      "pass": true
+    },
+    {
+      "name": "9 cloud telemetry dedup",
+      "pass": true
+    },
+    {
+      "name": "10 out-of-order retained",
+      "pass": true
+    },
+    {
+      "name": "11 missing sequence marked",
+      "pass": true
+    },
+    {
+      "name": "12 reconnect exponential backoff",
+      "pass": true
+    },
+    {
+      "name": "13 reconnect jitter and cap",
+      "pass": true
+    },
+    {
+      "name": "14 weak network retry retained",
+      "pass": true
+    },
+    {
+      "name": "15 duplicate commandId",
+      "pass": true
+    },
+    {
+      "name": "16 expired dangerous command",
+      "pass": true
+    },
+    {
+      "name": "17 STOP safety policy",
+      "pass": true
+    },
+    {
+      "name": "18 ACK offline cache",
+      "pass": true
+    },
+    {
+      "name": "19 ACK priority replay",
+      "pass": true
+    },
+    {
+      "name": "20 queue full explicit",
+      "pass": true
+    },
+    {
+      "name": "21 disk warning",
+      "pass": true
+    },
+    {
+      "name": "22 malformed telemetry",
+      "pass": true
+    },
+    {
+      "name": "23 tenant mismatch",
+      "pass": true
+    },
+    {
+      "name": "24 device mismatch",
+      "pass": true
+    },
+    {
+      "name": "25 invalid HMAC",
+      "pass": true
+    },
+    {
+      "name": "26 clock drift",
+      "pass": true
+    },
+    {
+      "name": "27 weak-network latency 100ms compressed",
+      "pass": true
+    },
+    {
+      "name": "28 weak-network latency 500ms compressed",
+      "pass": true
+    },
+    {
+      "name": "29 weak-network latency 2000ms compressed",
+      "pass": true
+    },
+    {
+      "name": "30 weak-network failure 5%",
+      "pass": true
+    },
+    {
+      "name": "31 weak-network failure 20%",
+      "pass": true
+    },
+    {
+      "name": "32 weak-network failure 50%",
+      "pass": true
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import mqtt, { MqttClient } from 'mqtt';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -120,6 +121,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
 
   private async writeTelemetryRecords(deviceId: string, fieldId: string, data: Record<string, unknown>) {
     const reportedAt = typeof data.timestamp === 'string' ? new Date(data.timestamp) : new Date();
+    const messageId = typeof data.messageId === 'string' && data.messageId.trim() ? data.messageId.trim() : undefined;
     const candidates = [
       { key: 'soilMoisture', type: 'SOIL_MOISTURE', unit: '%' },
       { key: 'temperature', type: 'TEMPERATURE', unit: 'C' },
@@ -131,6 +133,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     const records = candidates
       .filter((item) => typeof data[item.key] === 'number')
       .map((item) => ({
+        eventId: messageId ? `edge:${createHash('sha256').update(`${messageId}:${item.key}`).digest('hex')}` : undefined,
         deviceId,
         fieldId,
         type: item.type,
@@ -139,9 +142,8 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
         reportedAt
       }));
 
-    if (records.length > 0) {
-      await this.prisma.sensorRecord.createMany({ data: records });
-    }
+    const inserted = records.length > 0 ? await this.prisma.sensorRecord.createMany({ data: records, skipDuplicates: true }) : { count: 0 };
+    if (messageId && inserted?.count === 0) return;
 
     if (typeof data.soilMoisture === 'number') {
       const advice = this.irrigationRuleService.evaluate({ fieldId, soilMoisture: data.soilMoisture });

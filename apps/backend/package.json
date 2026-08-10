@@ -25,7 +25,8 @@
     "test:p0-plc": "ts-node scripts/verify-p0-plc-control-path.ts",
     "test:p0-modbus": "ts-node scripts/verify-p0-modbus-transport.ts",
     "plc:commissioning": "ts-node scripts/agrios-plc-commissioning.ts",
-    "test:p0-logo-automation": "ts-node scripts/verify-p0-logo-bench-automation.ts"
+    "test:p0-logo-automation": "ts-node scripts/verify-p0-logo-bench-automation.ts",
+    "test:p0-edge-reliability": "ts-node scripts/verify-p0-edge-reliability.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
