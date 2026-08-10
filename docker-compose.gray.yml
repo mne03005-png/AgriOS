@@ -1,0 +1,22 @@
+name: agrios-gray
+
+services:
+  agrios-api:
+    environment:
+      DEVICE_CONTROL_MODE: MOCK
+      DEVICE_CONTROL_DRY_RUN: "true"
+      VALVE_ALLOW_REAL_CONTROL: "false"
+      VALVE_REQUIRE_FEEDBACK: "true"
+      ENABLE_AUTO_EXECUTION: "false"
+
+networks:
+  agrios_internal:
+    name: agrios-gray-internal
+
+volumes:
+  agrios_mysql_data:
+    name: agrios-gray-mysql-data
+  agrios_redis_data:
+    name: agrios-gray-redis-data
+  agrios_mosquitto_data:
+    name: agrios-gray-mosquitto-data

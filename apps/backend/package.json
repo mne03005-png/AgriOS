@@ -20,8 +20,8 @@
     "sim:p13:valve:timeout": "node -e \"process.env.SCENARIO='timeout'; require('ts-node/register'); require('./scripts/simulators/valve-controller-simulator.ts')\"",
     "test:stage2": "node scripts/verify-stage2-auth.mjs",
     "test:stage3": "node scripts/verify-stage3-ops.mjs",
-    "test:stage4": "node scripts/verify-stage4-readonly-iot.mjs"
-    ,"test:phase-a": "node scripts/verify-phase-a-security.mjs"
+    "test:stage4": "node scripts/verify-stage4-readonly-iot.mjs",
+    "test:phase-a": "node scripts/verify-phase-a-security.mjs"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
@@ -45,12 +45,16 @@
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.0",
     "@types/node": "^22.0.0",
+    "eslint": "^9.39.5",
+    "globals": "^17.9.0",
     "prisma": "^6.10.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8.66.0"
   }
 }

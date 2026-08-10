@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestContextService } from '../../common/request-context.service';
@@ -10,7 +10,7 @@ import { InMemoryQueueAdapter } from './in-memory-queue.adapter';
 import { QueueAdapter } from './queue-adapter.interface';
 
 @Injectable()
-export class ActionQueueService {
+export class ActionQueueService implements OnModuleDestroy {
   private readonly adapter: QueueAdapter;
   private processing = false;
 
@@ -37,9 +37,9 @@ export class ActionQueueService {
         maxRetries
       }
     });
-    await this.adapter.enqueue(job.id);
+    await this.adapter.enqueue(job.id, this.delayUntil(job.scheduledAt));
     this.eventBus.publish('action.queue.queued', { farmId: input.farmId, actionPlanId: input.actionPlanId, jobId: job.id, driver: this.adapter.name }, this.requestContext.getTenantId());
-    void this.process();
+    if (!this.adapter.handlesProcessing) void this.process();
     return job;
   }
 
@@ -61,7 +61,7 @@ export class ActionQueueService {
     });
     await this.adapter.enqueue(job.id);
     this.eventBus.publish('action.queue.retry', { jobId: id, actionPlanId: job.actionPlanId, farmId: job.farmId }, job.tenantId);
-    void this.process();
+    if (!this.adapter.handlesProcessing) void this.process();
     return job;
   }
 
@@ -83,6 +83,7 @@ export class ActionQueueService {
   }
 
   async process() {
+    if (this.adapter.handlesProcessing) return;
     if (this.processing) return;
     this.processing = true;
     try {
@@ -100,11 +101,15 @@ export class ActionQueueService {
     const job = await (this.prisma as any).actionQueueJob.findUnique({ where: { id } });
     if (!job || ['FAILED', 'SUCCESS', 'DEAD_LETTERED'].includes(job.status)) return;
     if (job.scheduledAt && new Date(job.scheduledAt).getTime() > Date.now()) {
-      await this.adapter.enqueue(id);
+      await this.adapter.enqueue(id, this.delayUntil(job.scheduledAt));
       return;
     }
 
-    await (this.prisma as any).actionQueueJob.update({ where: { id }, data: { status: 'EXECUTING', startedAt: new Date() } });
+    const claimed = await (this.prisma as any).actionQueueJob.updateMany({
+      where: { id, status: { in: ['QUEUED', 'RETRYING'] } },
+      data: { status: 'EXECUTING', startedAt: new Date() }
+    });
+    if (claimed.count !== 1) return;
     try {
       const plan = await this.actionExecutor.executePlan(job.actionPlanId);
       const updatedJob = await (this.prisma as any).actionQueueJob.update({
@@ -139,11 +144,19 @@ export class ActionQueueService {
     const configured = this.config.get<string>('ACTION_QUEUE_DRIVER') ?? (redisUrl ? 'bullmq' : 'memory');
     if (configured === 'bullmq' && redisUrl) {
       try {
-        return new BullMqQueueAdapter(redisUrl);
+        return new BullMqQueueAdapter(redisUrl, (jobId) => this.processJob(jobId));
       } catch (error) {
         console.warn(error instanceof Error ? error.message : String(error));
       }
     }
-    return new InMemoryQueueAdapter();
+    return new InMemoryQueueAdapter(() => void this.process());
+  }
+
+  private delayUntil(value?: Date | string | null) {
+    return value ? Math.max(0, new Date(value).getTime() - Date.now()) : 0;
+  }
+
+  async onModuleDestroy() {
+    await this.adapter.close?.();
   }
 }

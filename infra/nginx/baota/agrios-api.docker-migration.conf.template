@@ -1,0 +1,73 @@
+# Phase 3 review template only. Do not install this file automatically.
+# The default public upstream remains PM2. Change proxy_pass to
+# agrios_api_docker only after every Phase 5 gate has passed.
+
+upstream agrios_api_pm2 {
+    server 127.0.0.1:3100;
+    keepalive 16;
+}
+
+upstream agrios_api_docker {
+    server 127.0.0.1:3200;
+    keepalive 16;
+}
+
+server {
+    listen 80;
+    server_name agrios-api.xyzwtt.com;
+    root /www/wwwroot/agrios-api.xyzwtt.com;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /www/wwwroot/agrios-api.xyzwtt.com;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name agrios-api.xyzwtt.com;
+
+    ssl_certificate /etc/letsencrypt/live/agrios-api.xyzwtt.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/agrios-api.xyzwtt.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:AGRIOS_API_SSL:10m;
+    ssl_session_timeout 1d;
+
+    client_max_body_size 30m;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    location = /healthz {
+        proxy_pass http://agrios_api_pm2/api/v1/health/ready;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Request-ID $request_id;
+    }
+
+    location / {
+        # CUTOVER: replace agrios_api_pm2 with agrios_api_docker only after
+        # Phase 5 succeeds. Rollback is the inverse one-line change.
+        proxy_pass http://agrios_api_pm2;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Request-ID $request_id;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 130s;
+        proxy_send_timeout 130s;
+    }
+
+    access_log /www/wwwlogs/agrios-api.xyzwtt.com.log;
+    error_log /www/wwwlogs/agrios-api.xyzwtt.com.error.log;
+}

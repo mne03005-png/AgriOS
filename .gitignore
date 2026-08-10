@@ -3,6 +3,8 @@ dist/
 .env
 .env.local
 *.log
+__pycache__/
+*.pyc
 .DS_Store
 Thumbs.db
 uploads/
@@ -13,6 +15,7 @@ secrets/
 backups/
 *.bak
 *.dump
+*.sql.gz
 *.pem
 *.key
 *.p12

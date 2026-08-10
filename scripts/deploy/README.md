@@ -10,6 +10,15 @@ cd /home/ubuntu/agrios-server
 
 The script manages only `agrios-backend`. It does not define or modify `mahjong-backend`.
 
+Before a Docker migration, run the read-only preflight:
+
+```bash
+cd /home/ubuntu/agrios-server
+bash scripts/deploy/preflight-docker-migration.sh
+```
+
+The preflight does not start containers, apply migrations, reload Nginx, or change PM2. It validates the Compose rendering, required ports, rollback target, current public health, database migration status, backup freshness, certificates, BaoTa Nginx syntax, disk, and memory.
+
 Options:
 
 - `--dry-run`: performs preflight checks and prints the planned write steps without pulling, backing up, migrating, publishing, or reloading services.

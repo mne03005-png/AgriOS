@@ -1,9 +1,23 @@
 name: agrios-production
 
+x-logging: &production-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-service-defaults: &service-defaults
+  init: true
+  restart: unless-stopped
+  stop_grace_period: 30s
+  logging: *production-logging
+  security_opt:
+    - no-new-privileges:true
+
 services:
   agrios-mysql:
-    image: mysql:8.4
-    restart: unless-stopped
+    <<: *service-defaults
+    image: mysql:8.4.6
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
@@ -13,34 +27,36 @@ services:
       - agrios_mysql_data:/var/lib/mysql
     networks:
       - agrios_internal
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 20s
-    security_opt:
-      - no-new-privileges:true
 
   agrios-redis:
+    <<: *service-defaults
     image: redis:7.2.5-alpine
-    restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
     volumes:
       - agrios_redis_data:/data
     networks:
       - agrios_internal
+    mem_limit: 256m
+    cpus: 0.50
+    pids_limit: 128
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 10
-    security_opt:
-      - no-new-privileges:true
 
   agrios-mosquitto:
+    <<: *service-defaults
     image: eclipse-mosquitto:2.0.22
-    restart: unless-stopped
     ports:
       - "${MQTT_TLS_BIND_ADDRESS:-0.0.0.0}:${MQTT_TLS_PORT:-8883}:8883"
     volumes:
@@ -50,7 +66,11 @@ services:
     networks:
       agrios_internal:
         aliases:
+          # Keep TLS hostname verification inside Docker without using public DNS.
           - agrios-mqtt.xyzwtt.com
+    mem_limit: 256m
+    cpus: 0.50
+    pids_limit: 128
     healthcheck:
       test: ["CMD-SHELL", "mosquitto_pub -h agrios-mqtt.xyzwtt.com -p 8883 --cafile /mosquitto/secrets/tls/fullchain.pem -u \"$${MQTT_USERNAME}\" -P \"$${MQTT_PASSWORD}\" -q 1 -t '$$CONTROL/dynamic-security/v1' -m '{\"commands\":[{\"command\":\"getClients\"}]}' >/dev/null"]
       interval: 15s
@@ -60,15 +80,13 @@ services:
     environment:
       MQTT_USERNAME: ${MQTT_USERNAME}
       MQTT_PASSWORD: ${MQTT_PASSWORD}
-    security_opt:
-      - no-new-privileges:true
 
   agrios-api:
-    image: agrios-api:${AGRIOS_IMAGE_TAG:-production}
+    <<: *service-defaults
+    image: agrios-api:${AGRIOS_IMAGE_TAG:?AGRIOS_IMAGE_TAG must be an immutable release identifier}
     build:
       context: .
       dockerfile: apps/backend/Dockerfile
-    restart: unless-stopped
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -78,18 +96,30 @@ services:
       REDIS_PORT: 6379
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
-      WEB_ORIGIN: ${CORS}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://agrios.xyzwtt.com}
       MQTT_ENABLED: "true"
-      MQTT_URL: ${MQTT_URL}
+      # The certificate name remains agrios-mqtt.xyzwtt.com; Docker resolves
+      # this alias directly to the broker on agrios_internal.
+      MQTT_URL: mqtts://agrios-mqtt.xyzwtt.com:8883
+      MQTT_BROKER_URL: mqtts://agrios-mqtt.xyzwtt.com:8883
       MQTT_CLIENT_ID: ${MQTT_CLIENT_ID:-agrios-api-production}
       MQTT_USERNAME: ${MQTT_USERNAME}
       MQTT_PASSWORD: ${MQTT_PASSWORD}
       DEVICE_OFFLINE_AFTER_SECONDS: ${DEVICE_OFFLINE_AFTER_SECONDS:-300}
+      DEVICE_ACK_HMAC_SECRET: ${DEVICE_ACK_HMAC_SECRET:?DEVICE_ACK_HMAC_SECRET is required}
+      DEVICE_ACK_HMAC_TOLERANCE_SECONDS: ${DEVICE_ACK_HMAC_TOLERANCE_SECONDS:-300}
+      DEVICE_CONTROL_MODE: ${DEVICE_CONTROL_MODE:-MOCK}
+      DEVICE_CONTROL_DRY_RUN: ${DEVICE_CONTROL_DRY_RUN:-true}
+      VALVE_ALLOW_REAL_CONTROL: ${VALVE_ALLOW_REAL_CONTROL:-false}
+      VALVE_REQUIRE_FEEDBACK: ${VALVE_REQUIRE_FEEDBACK:-true}
+      ENABLE_AUTO_EXECUTION: ${ENABLE_AUTO_EXECUTION:-false}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6}
       OPENAI_INPUT_COST_PER_MILLION: ${OPENAI_INPUT_COST_PER_MILLION:-0}
       OPENAI_OUTPUT_COST_PER_MILLION: ${OPENAI_OUTPUT_COST_PER_MILLION:-0}
-      SPEECH_SERVICE_URL: ${SPEECH_SERVICE_URL:-http://127.0.0.1:8000}
+      SPEECH_SERVICE_URL: http://${SPEECH_SERVICE_HOST:-host.docker.internal}:${SPEECH_SERVICE_PORT:-8000}
       NODE_EXTRA_CA_CERTS: /run/agrios-mqtt-ca/fullchain.pem
     ports:
       - "127.0.0.1:${AGRIOS_API_HOST_PORT:-3200}:3000"
@@ -97,6 +127,16 @@ services:
       - ${AGRIOS_TLS_DIR}:/run/agrios-mqtt-ca:ro
     networks:
       - agrios_internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
     depends_on:
       agrios-mysql:
         condition: service_healthy
@@ -104,28 +144,29 @@ services:
         condition: service_healthy
       agrios-mosquitto:
         condition: service_healthy
-    command: ["sh", "-c", "npx prisma migrate deploy --schema prisma/schema.prisma && exec node dist/src/main.js"]
+    command: ["sh", "-c", "../../node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma && exec node dist/src/main.js"]
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/v1/health/live"]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 30s
-    security_opt:
-      - no-new-privileges:true
 
   agrios-web:
-    image: agrios-web:${AGRIOS_IMAGE_TAG:-production}
+    <<: *service-defaults
+    image: agrios-web:${AGRIOS_IMAGE_TAG:?AGRIOS_IMAGE_TAG must be an immutable release identifier}
     build:
       context: .
       dockerfile: apps/mobile/Dockerfile.production
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL}
-    restart: unless-stopped
     ports:
       - "127.0.0.1:${AGRIOS_WEB_HOST_PORT:-3201}:80"
     networks:
       - agrios_internal
+    mem_limit: 256m
+    cpus: 0.50
+    pids_limit: 128
     depends_on:
       agrios-api:
         condition: service_healthy
@@ -135,8 +176,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
-    security_opt:
-      - no-new-privileges:true
 
 networks:
   agrios_internal:

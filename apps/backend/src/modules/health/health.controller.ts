@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { HealthService } from './health.service';
 
@@ -15,8 +15,10 @@ export class HealthController {
 
   @Get('ready')
   @ApiOkResponse({ description: '生产就绪检查' })
-  ready() {
-    return this.health.ready();
+  async ready() {
+    const readiness = await this.health.ready();
+    if (!readiness.ok) throw new ServiceUnavailableException(readiness);
+    return readiness;
   }
 
   @Get('modules')

@@ -16,11 +16,15 @@ function assertNotContains(file, source, unexpected) {
   if (source.includes(unexpected)) throw new Error(`${file} must not contain: ${unexpected}`);
 }
 
+function assertMatches(file, source, expected) {
+  if (!expected.test(source)) throw new Error(`${file} missing pattern: ${expected}`);
+}
+
 const schema = read('prisma/schema.prisma');
-assertContains('prisma/schema.prisma', schema, 'tokenVersion Int     @default(0)');
-assertContains('prisma/schema.prisma', schema, 'passwordChangedAt DateTime?');
-assertContains('prisma/schema.prisma', schema, 'failedLoginCount Int @default(0)');
-assertContains('prisma/schema.prisma', schema, 'lockedUntil DateTime?');
+assertMatches('prisma/schema.prisma', schema, /tokenVersion\s+Int\s+@default\(0\)/);
+assertMatches('prisma/schema.prisma', schema, /passwordChangedAt\s+DateTime\?/);
+assertMatches('prisma/schema.prisma', schema, /failedLoginCount\s+Int\s+@default\(0\)/);
+assertMatches('prisma/schema.prisma', schema, /lockedUntil\s+DateTime\?/);
 
 const authService = read('src/modules/auth/auth.service.ts');
 assertContains('src/modules/auth/auth.service.ts', authService, 'async changePassword');

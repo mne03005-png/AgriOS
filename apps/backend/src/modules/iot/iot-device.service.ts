@@ -186,7 +186,8 @@ export class IotDeviceService {
       const minutesSinceLastTelemetry =
         lastTelemetryAt instanceof Date ? Math.floor((Date.now() - lastTelemetryAt.getTime()) / 1000 / 60) : null;
       const nextStatus = minutesSinceLastTelemetry !== null && minutesSinceLastTelemetry <= offlineMinutes ? 'ONLINE' : 'OFFLINE';
-      nextStatus === 'ONLINE' ? (result.online += 1) : (result.offline += 1);
+      if (nextStatus === 'ONLINE') result.online += 1;
+      else result.offline += 1;
       if (device.iotStatus !== nextStatus || device.online !== (nextStatus === 'ONLINE')) {
         await (this.prisma as any).device.update({
           where: { id: device.id },
@@ -274,7 +275,8 @@ export class IotDeviceService {
       } else {
         const device = await (this.prisma as any).device.create({ data });
         created += 1;
-        device.fieldId ? (bound += 1) : (unbound += 1);
+        if (device.fieldId) bound += 1;
+        else unbound += 1;
         items.push(device);
       }
     }
