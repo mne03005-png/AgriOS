@@ -49,6 +49,7 @@ export interface PlcStatus {
   online: boolean;
   emergencyStop: boolean;
   noWater: boolean;
+  overloadTrip: boolean;
   pumpRunning: boolean;
   valveOpen: boolean;
 }

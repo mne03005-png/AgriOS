@@ -23,7 +23,9 @@
     "test:stage4": "node scripts/verify-stage4-readonly-iot.mjs",
     "test:phase-a": "node scripts/verify-phase-a-security.mjs",
     "test:p0-plc": "ts-node scripts/verify-p0-plc-control-path.ts",
-    "test:p0-modbus": "ts-node scripts/verify-p0-modbus-transport.ts"
+    "test:p0-modbus": "ts-node scripts/verify-p0-modbus-transport.ts",
+    "plc:commissioning": "ts-node scripts/agrios-plc-commissioning.ts",
+    "test:p0-logo-automation": "ts-node scripts/verify-p0-logo-bench-automation.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

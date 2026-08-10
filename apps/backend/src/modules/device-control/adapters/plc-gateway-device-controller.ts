@@ -13,7 +13,8 @@ type PlcProfile = {
 @Injectable()
 export class PlcGatewayDeviceController implements PlcControllerPort {
   private readonly results = new Map<string, PlcCommandResult>();
-  private status: PlcStatus = { online: false, emergencyStop: false, noWater: false, pumpRunning: false, valveOpen: false };
+  private status: PlcStatus = { online: false, emergencyStop: false, noWater: false, overloadTrip: false, pumpRunning: false, valveOpen: false };
+  private readonly executionCounts = new Map<string, number>();
 
   constructor(private readonly config: ConfigService, @Optional() private readonly modbusTransport?: ModbusTcpTransport) {}
 
@@ -25,13 +26,17 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
     if (!this.realExecutionEnabled()) return this.remember(command, this.rejected(command, 'SAFETY_BLOCKED', 'REAL_CONTROL_DISABLED'));
     if (!this.profileConfigured()) return this.remember(command, this.rejected(command, 'REJECTED', 'PLC_PROFILE_UNCONFIGURED'));
     if (!this.status.online) return this.remember(command, this.rejected(command, 'REJECTED', 'CONTROLLER_OFFLINE'));
-    if (command.action === 'PUMP_ON' && (this.status.emergencyStop || this.status.noWater || !this.status.valveOpen)) {
+    if (command.action === 'PUMP_ON' && (this.status.emergencyStop || this.status.noWater || this.status.overloadTrip || !this.status.valveOpen)) {
       return this.remember(command, this.rejected(command, 'SAFETY_BLOCKED', 'PUMP_INTERLOCK_BLOCKED'));
+    }
+    if (command.action === 'VALVE_OPEN' && this.status.emergencyStop) {
+      return this.remember(command, this.rejected(command, 'SAFETY_BLOCKED', 'EMERGENCY_STOP_ACTIVE'));
     }
     if (command.action === 'VALVE_CLOSE' && this.status.pumpRunning) {
       return this.remember(command, this.rejected(command, 'SAFETY_BLOCKED', 'STOP_PUMP_BEFORE_VALVE_CLOSE'));
     }
     if (this.config.get<string>('NODE_ENV') === 'test' && this.config.get<string>('PLC_GATEWAY_FAKE_TRANSPORT') === 'true') {
+      this.executionCounts.set(command.commandId, (this.executionCounts.get(command.commandId) ?? 0) + 1);
       if (command.parameters.simulate === 'timeout') return this.remember(command, this.rejected(command, 'TIMEOUT', 'ACK_TIMEOUT'));
       if (command.parameters.simulate === 'feedback-mismatch') return this.remember(command, this.rejected(command, 'FAILED', 'FEEDBACK_MISMATCH'));
       if (command.action === 'VALVE_OPEN') this.status.valveOpen = true;
@@ -54,6 +59,7 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
     // Transport is intentionally absent until the commissioned profile and hardware protocol are approved.
     return this.remember(command, this.rejected(command, 'REJECTED', 'PLC_TRANSPORT_NOT_COMMISSIONED'));
   }
+  executionCount(commandId: string) { return this.executionCounts.get(commandId) ?? 0; }
 
   emergencyStop(command: PlcControlCommand): Promise<PlcCommandResult>;
   emergencyStop(deviceId: string, payload?: DeviceControlPayload): Promise<PlcCommandResult> | object;
