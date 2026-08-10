@@ -15,5 +15,10 @@
   ],
   "engines": {
     "node": ">=20"
+  },
+  "overrides": {
+    "@nestjs/swagger@11.4.6": {
+      "js-yaml": "5.2.3"
+    }
   }
 }
