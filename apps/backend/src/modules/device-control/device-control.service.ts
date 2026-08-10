@@ -31,7 +31,7 @@ export class DeviceControlService {
     private readonly audit: AuditService
   ) {}
 
-  async send(deviceId: string, dto: DeviceControlCommandDto & { adapter?: AdapterAlias | DeviceControlMode }) {
+  async send(deviceId: string, dto: DeviceControlCommandDto & { adapter?: AdapterAlias | DeviceControlMode; controlPath?: 'ACTION_QUEUE'; commandId?: string }) {
     this.validatePayload(dto);
     const mode = this.resolveMode(dto.adapter);
     if (this.isReadOnlyControlMode(mode)) {
@@ -46,8 +46,11 @@ export class DeviceControlService {
       await this.recordAttempt(deviceId, dto.command, mode, result);
       return result;
     }
+    if (dto.controlPath !== 'ACTION_QUEUE' || !dto.commandId) {
+      throw new BadRequestException('Physical commands must enter through Safety, Approval, ActionPlan and ActionQueue');
+    }
     const controller = this.controllerForMode(mode);
-    const payload = { remark: dto.remark, ...(dto.payload ?? {}) };
+    const payload = { remark: dto.remark, ...(dto.payload ?? {}), controlPath: dto.controlPath, commandId: dto.commandId, idempotencyKey: dto.commandId };
     const result = await this.dispatch(controller, deviceId, dto.command, payload);
     await this.recordAttempt(deviceId, dto.command, mode, result);
     this.eventBus.publish('device.command.sent', { deviceId, command: dto.command, mode, result });

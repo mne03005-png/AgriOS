@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import mqtt, { MqttClient } from 'mqtt';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -53,11 +53,15 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     this.client?.end();
   }
 
-  publishCommand(dto: DeviceCommandDto) {
+  publishCommand(dto: DeviceCommandDto, authorization?: { controlPath: 'ACTION_QUEUE'; commandId: string }) {
+    if (authorization?.controlPath !== 'ACTION_QUEUE' || !authorization.commandId) {
+      throw new BadRequestException('Direct MQTT commands are disabled; ActionQueue adapter authorization is required');
+    }
     const topic = MQTT_TOPICS.command(dto.deviceId);
     const message = JSON.stringify({
       command: dto.command,
-      requestId: dto.requestId,
+      commandId: authorization.commandId,
+      requestId: authorization.commandId,
       ...(dto.payload ?? {})
     });
     this.client?.publish(topic, message);

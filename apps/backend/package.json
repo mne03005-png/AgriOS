@@ -21,7 +21,8 @@
     "test:stage2": "node scripts/verify-stage2-auth.mjs",
     "test:stage3": "node scripts/verify-stage3-ops.mjs",
     "test:stage4": "node scripts/verify-stage4-readonly-iot.mjs",
-    "test:phase-a": "node scripts/verify-phase-a-security.mjs"
+    "test:phase-a": "node scripts/verify-phase-a-security.mjs",
+    "test:p0-plc": "ts-node scripts/verify-p0-plc-control-path.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

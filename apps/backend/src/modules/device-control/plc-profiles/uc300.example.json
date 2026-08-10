@@ -1,0 +1,25 @@
+{
+  "profile": "uc300-example-unconfigured",
+  "protocol": "MODBUS_TCP_OR_RTU_OVER_GATEWAY",
+  "unitId": null,
+  "registers": {
+    "valveOpenWrite": null,
+    "valveCloseWrite": null,
+    "valveOpenFeedback": null,
+    "pumpStartWrite": null,
+    "pumpStopWrite": null,
+    "pumpRunningFeedback": null,
+    "emergencyStopWrite": null,
+    "emergencyStopFeedback": null,
+    "noWaterFeedback": null
+  },
+  "timeoutMs": 10000,
+  "retryLimit": 2,
+  "failSafe": {
+    "stopPriority": true,
+    "requireValveFeedbackBeforePump": true,
+    "stopPumpBeforeValveClose": true,
+    "plcIsFinalSafetyAuthority": true
+  },
+  "note": "Example only. No real register address has been supplied or inferred. REAL mode must reject this profile."
+}

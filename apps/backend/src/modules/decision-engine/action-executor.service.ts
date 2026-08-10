@@ -46,7 +46,15 @@ export class ActionExecutorService {
     const executions = [];
     for (const action of actions) {
       if (action.type !== 'DEVICE_COMMAND' || !action.deviceId || !action.command) continue;
-      const execution = await this.executeDeviceCommand(actionPlanId, action.deviceId, action.command, action.payload);
+      const execution = await this.executeDeviceCommand(actionPlanId, action.deviceId, action.command, {
+        ...(action.payload ?? {}),
+        tenantId: plan.tenantId,
+        farmId: action.farmId ?? plan.decision?.farmId ?? '',
+        fieldId: action.fieldId ?? plan.fieldId,
+        zoneId: action.zoneId,
+        requestedAt: action.requestedAt ?? new Date().toISOString(),
+        expiresAt: action.expiresAt ?? new Date(Date.now() + 5 * 60_000).toISOString()
+      }, action.commandId);
       executions.push(execution);
     }
 
@@ -94,17 +102,42 @@ export class ActionExecutorService {
     return updated;
   }
 
-  private async executeDeviceCommand(actionPlanId: string, deviceId: string, command: string, payload?: Record<string, unknown>) {
+  private async executeDeviceCommand(actionPlanId: string, deviceId: string, command: string, payload?: Record<string, unknown>, existingCommandId?: string) {
+    // Stable across queue retries: a retried ActionPlan cannot create a second physical command identity.
+    const commandId = existingCommandId ?? `${actionPlanId}:${deviceId}:${command}`;
+    const previous = await (this.prisma as any).actionExecution.findFirst({ where: { requestId: commandId }, orderBy: { createdAt: 'desc' } });
+    if (previous) return previous;
+    await (this.prisma as any).deviceCommand.upsert({
+      where: { requestId: commandId },
+      create: {
+        tenantId: payload?.tenantId,
+        deviceId,
+        command,
+        payload: { ...(payload ?? {}), commandId },
+        status: 'PENDING',
+        mqttTopic: `agrios/device/${deviceId}/command`,
+        requestId: commandId
+      },
+      update: {}
+    });
+    const claimed = await (this.prisma as any).deviceCommand.updateMany({
+      where: { requestId: commandId, status: 'PENDING' },
+      data: { status: 'SENT', sentAt: new Date() }
+    });
+    if (claimed.count !== 1) {
+      return (await (this.prisma as any).actionExecution.findFirst({ where: { requestId: commandId }, orderBy: { createdAt: 'desc' } }))
+        ?? { requestId: commandId, status: 'SENT', duplicate: true };
+    }
     const created = await (this.prisma as any).actionExecution.create({
-      data: { actionPlanId, deviceId, command, status: 'PENDING' }
+      data: { actionPlanId, deviceId, command, status: 'PENDING', requestId: commandId }
     });
     try {
-      const result: any = await this.deviceControlService.send(deviceId, { command: command as SupportedCommand, payload });
+      const result: any = await this.deviceControlService.send(deviceId, { command: command as SupportedCommand, payload: { ...(payload ?? {}), commandId }, controlPath: 'ACTION_QUEUE', commandId });
       return (this.prisma as any).actionExecution.update({
         where: { id: created.id },
         data: {
           status: 'SENT',
-          requestId: result.deviceCommand?.requestId,
+          requestId: commandId,
           result,
           executedAt: new Date()
         }
