@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { DeviceControlPayload } from '../device-controller.interface';
 import { PlcCommandResult, PlcControlCommand, PlcControllerPort, PlcFeedback, PlcStatus } from '../plc-control.types';
 import { ModbusTcpTransport } from '../transports/modbus-tcp.transport';
+import { canonicalPlcLogicalName, expectedFeedbackLogicalName, findPlcMappingByLogicalName, isReadCapableMapping, isSupportedFeedbackMapping, isWriteCapableMapping } from '@agrios/edge-core';
 
 type PlcProfile = {
   testOnly?: boolean;
@@ -169,8 +170,14 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
     const unitId = profile?.transport?.unitId ?? profile?.unitId;
     const configuredUnitId = Number(this.config.get<string>('PLC_MODBUS_UNIT_ID') ?? unitId);
     const testProfileAllowed = this.config.get<string>('NODE_ENV') === 'test' && profile?.testOnly === true;
-    const approvedRealProfile = profile?.realHardwareApproved === true && Array.isArray(profile.mapping) && profile.mapping.length > 0
-      && profile.mapping.every((item) => Number.isInteger(item.address) && typeof item.logicalName === 'string' && item.logicalName.trim() && typeof item.functionCode === 'string' && item.functionCode !== 'UNCONFIRMED' && typeof item.feedbackPoint === 'string' && item.feedbackPoint !== 'UNCONFIRMED');
+    const mappingsValid = Array.isArray(profile?.mapping) && profile.mapping.length > 0 && profile.mapping.every((item) => {
+      if (!Number.isInteger(item.address) || !item.logicalName?.trim() || !item.functionCode || item.functionCode === 'UNCONFIRMED') return false;
+      if (!isWriteCapableMapping(item)) return true;
+      const feedback = findPlcMappingByLogicalName(profile.mapping, String(item.feedbackPoint ?? ''));
+      const expected = expectedFeedbackLogicalName(item.logicalName);
+      return Boolean(feedback && feedback !== item && (!expected || canonicalPlcLogicalName(item.feedbackPoint) === expected) && isReadCapableMapping(feedback) && isSupportedFeedbackMapping(feedback) && Number.isInteger(feedback.address));
+    });
+    const approvedRealProfile = profile?.realHardwareApproved === true && mappingsValid;
     return Boolean(profile && Number.isInteger(unitId) && configuredUnitId === unitId && addresses.length > 0 && addresses.every(Number.isInteger) && (testProfileAllowed || approvedRealProfile || this.config.get<string>('PLC_TRANSPORT') !== 'MODBUS_TCP'));
   }
   private async executeModbus(command: PlcControlCommand): Promise<PlcCommandResult> {
@@ -180,7 +187,7 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
     };
     const pointName = logicalPoint[command.action];
     const profile = this.config.get<PlcProfile>('PLC_PROFILE');
-    const mappedPoint = pointName ? profile?.mapping?.find((item) => item.logicalName === pointName) : undefined;
+    const mappedPoint = pointName ? findPlcMappingByLogicalName(profile?.mapping, pointName) : undefined;
     const point = pointName ? profile?.points?.[pointName] ?? mappedPoint : undefined;
     if (!point || !Number.isInteger(point.address)) return this.rejected(command, 'REJECTED', 'PLC_POINT_UNCONFIRMED');
     const startedAt = new Date().toISOString();
@@ -203,7 +210,7 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
   }
   private unavailableStatus(errorCode: string): PlcStatus { return { ...this.status, online: false, fresh: false, stale: true, errorCode }; }
   private feedbackPoint(profile: PlcProfile | undefined, logicalName: string) {
-    const mapped = profile?.mapping?.find((item) => item.logicalName === logicalName || item.feedbackPoint === logicalName);
+    const mapped = findPlcMappingByLogicalName(profile?.mapping, logicalName);
     if (mapped && Number.isInteger(mapped.address) && mapped.functionCode && mapped.functionCode !== 'UNCONFIRMED') return { address: mapped.address as number, type: mapped.type ?? mapped.functionCode };
     if (profile?.testOnly === true) {
       const point = profile.points?.[logicalName];
@@ -238,7 +245,7 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
         const value = await this.readPoint(point);
         if (value === target.value) {
           const completedAt = new Date().toISOString();
-          return { ...pending, status: 'PHYSICALLY_CONFIRMED', executed: true, physicalConfirmed: true, acknowledged: true, completedAt, feedback: { ...pending.feedback, fake: profile?.testOnly === true, observedAt: completedAt, source: 'MODBUS_TCP', logicalPoint: target.point, value } };
+          return { ...pending, status: 'PHYSICALLY_CONFIRMED', executed: true, physicalConfirmed: true, acknowledged: true, completedAt, feedback: { ...pending.feedback, fake: profile?.testOnly === true, physicalConfirmed: true, observedAt: completedAt, source: 'MODBUS_TCP', logicalPoint: target.point, expectedState: target.value, observedState: value, tenantId: command.tenantId, farmId: command.farmId, deviceId: command.deviceId, commandId: command.commandId } };
         }
         const contradictory = target.contradictory ? this.feedbackPoint(profile, target.contradictory) : undefined;
         if (contradictory && await this.readPoint(contradictory)) return { ...pending, status: 'FEEDBACK_MISMATCH', errorCode: 'FEEDBACK_MISMATCH', completedAt: new Date().toISOString() };

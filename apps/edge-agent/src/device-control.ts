@@ -1,4 +1,4 @@
-import { PlcTransportPort } from '@agrios/edge-core';
+import { findPlcMappingByLogicalName, PlcTransportPort } from '@agrios/edge-core';
 import { EdgeConfig, realWriteEligible } from './config';
 
 export class FakePlcTransport implements PlcTransportPort {
@@ -40,7 +40,7 @@ export class EdgeDeviceControl {
     return { status: 'FEEDBACK_TIMEOUT', accepted: true, transportAccepted: true, executed: false, physicalConfirmed: false, errorCode: 'FEEDBACK_TIMEOUT' };
   }
   health() { return this.transport.healthCheck(); }
-  private mapping(logicalName: string) { const value = this.profile?.mapping?.find((item: any) => item.logicalName === logicalName || item.feedbackPoint === logicalName); return value && Number.isInteger(value.address) && value.functionCode && value.functionCode !== 'UNCONFIRMED' ? value : undefined; }
+  private mapping(logicalName: string) { const value = findPlcMappingByLogicalName(this.profile?.mapping, logicalName); return value && Number.isInteger(value.address) && value.functionCode && value.functionCode !== 'UNCONFIRMED' ? { ...value, address: value.address as number } : undefined; }
   private outputPoint(action: string) { const names: Record<string,string> = { VALVE_OPEN: 'valveOpen', VALVE_CLOSE: 'valveClose', PUMP_ON: 'pumpStart', PUMP_OFF: 'pumpStop', EMERGENCY_STOP: 'pumpStop' }; return this.mapping(names[action]); }
   private expectedFeedback(action: string) { const values: Record<string,{logicalName:string;value:boolean}> = { VALVE_OPEN: { logicalName: 'valveOpenFeedback', value: true }, VALVE_CLOSE: { logicalName: 'valveCloseFeedback', value: true }, PUMP_ON: { logicalName: 'pumpRunningFeedback', value: true }, PUMP_OFF: { logicalName: 'pumpRunningFeedback', value: false }, EMERGENCY_STOP: { logicalName: 'pumpRunningFeedback', value: false } }; const value=values[action]; const point=value?this.mapping(value.logicalName):undefined; return point?{...point,...value}:undefined; }
   private async readSafetyStatus() { try { const required=['emergencyStop','noWater','overloadTrip','pumpRunningFeedback','valveOpenFeedback']; const points=required.map((name)=>this.mapping(name)); if(points.some((item)=>!item))return{ok:false,errorCode:'FEEDBACK_UNAVAILABLE'}; const values:boolean[]=[]; for(const point of points)values.push(await this.readBoolean(point)); return{ok:true,emergencyStop:values[0],noWater:values[1],overloadTrip:values[2],pumpRunning:values[3],valveOpen:values[4]}; }catch{return{ok:false,errorCode:'PLC_STATUS_READ_FAILED'};} }

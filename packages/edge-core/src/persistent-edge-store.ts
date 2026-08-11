@@ -1,4 +1,5 @@
 import { mkdir, open, readFile, rename, stat } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 import { dirname } from 'node:path';
 import { EdgeAckRecord, EdgeCommandRecord, EdgePersistentState, EdgeTelemetryEnvelope } from './edge-reliability.types';
 
@@ -91,8 +92,19 @@ export class PersistentEdgeStore {
       const temporary = `${this.path}.tmp`;
       const handle = await open(temporary, 'w', 0o600);
       try { await handle.writeFile(`${json}\n`, 'utf8'); await handle.sync(); } finally { await handle.close(); }
-      await rename(temporary, this.path);
+      await this.atomicReplace(temporary);
     });
     return this.writes;
+  }
+
+  private async atomicReplace(temporary: string) {
+    for (let attempt = 0; ; attempt += 1) {
+      try { await rename(temporary, this.path); return; }
+      catch (error: any) {
+        const transientWindowsLock = process.platform === 'win32' && ['EACCES', 'EBUSY', 'EPERM'].includes(error?.code);
+        if (!transientWindowsLock || attempt >= 99) throw error;
+        await delay(20);
+      }
+    }
   }
 }

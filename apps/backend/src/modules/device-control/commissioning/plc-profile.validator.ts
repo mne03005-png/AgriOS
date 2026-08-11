@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { canonicalPlcLogicalName, expectedFeedbackLogicalName, findPlcMappingByLogicalName, isReadCapableMapping, isSupportedFeedbackMapping, isWriteCapableMapping, PlcProfileMapping } from '@agrios/edge-core';
 
 export interface PlcProfileValidation {
   schemaValid: boolean;
@@ -11,7 +12,7 @@ export interface PlcProfileValidation {
 }
 
 const requiredText = ['profileVersion', 'vendor', 'family', 'model', 'partNumber', 'hardwareVersion', 'firmwareVersion'] as const;
-const mappingText = ['logicalName', 'type', 'functionCode', 'dataType', 'unit', 'readWrite', 'feedbackPoint', 'failSafeState'] as const;
+const mappingText = ['logicalName', 'type', 'functionCode', 'dataType', 'unit', 'readWrite', 'failSafeState'] as const;
 
 export class PlcProfileValidator {
   async validateFile(path: string) {
@@ -41,7 +42,10 @@ export class PlcProfileValidator {
       if (!this.confirmedText(source?.[field])) errors.push(`MISSING_OR_UNCONFIRMED_source.${field}`);
     }
     if (!Array.isArray(profile.mapping) || profile.mapping.length === 0) errors.push('MISSING_mapping');
-    else profile.mapping.forEach((item: Record<string, any>, index: number) => this.validateMapping(item, index, errors));
+    else {
+      profile.mapping.forEach((item: Record<string, any>, index: number) => this.validateMapping(item, index, errors));
+      this.validateMappingReferences(profile.mapping as PlcProfileMapping[], errors);
+    }
 
     const schemaValid = errors.length === 0;
     const testOnly = profile.testOnly === true || profile.realHardwareApproved !== true;
@@ -62,6 +66,24 @@ export class PlcProfileValidator {
     if (!Number.isFinite(item?.scale)) errors.push(`MAPPING_${index}_scale_UNCONFIRMED`);
     if (!Number.isInteger(item?.timeoutMs) || item.timeoutMs < 1) errors.push(`MAPPING_${index}_timeoutMs_INVALID`);
     if (!Number.isInteger(item?.retry) || item.retry < 0) errors.push(`MAPPING_${index}_retry_INVALID`);
+  }
+
+  private validateMappingReferences(mapping: PlcProfileMapping[], errors: string[]) {
+    const names = mapping.map((item) => canonicalPlcLogicalName(item.logicalName));
+    names.forEach((name, index) => { if (name && names.indexOf(name) !== index) errors.push(`MAPPING_${index}_logicalName_DUPLICATE`); });
+    mapping.forEach((item, index) => {
+      if (!isWriteCapableMapping(item)) return;
+      const reference = canonicalPlcLogicalName(item.feedbackPoint);
+      if (!reference) { errors.push(`MAPPING_${index}_feedbackPoint_UNCONFIRMED`); return; }
+      const feedback = findPlcMappingByLogicalName(mapping, reference);
+      if (!feedback) { errors.push(`MAPPING_${index}_feedbackPoint_NOT_FOUND`); return; }
+      if (feedback === item) errors.push(`MAPPING_${index}_feedbackPoint_SELF_REFERENCE`);
+      if (!isReadCapableMapping(feedback)) errors.push(`MAPPING_${index}_feedbackPoint_NOT_READ_CAPABLE`);
+      if (!isSupportedFeedbackMapping(feedback)) errors.push(`MAPPING_${index}_feedbackPoint_FUNCTION_UNSUPPORTED`);
+      if (!Number.isInteger(feedback.address) || String(feedback.functionCode).toUpperCase() === 'UNCONFIRMED') errors.push(`MAPPING_${index}_feedbackPoint_UNCONFIRMED_MAPPING`);
+      const expected = expectedFeedbackLogicalName(item.logicalName);
+      if (expected && reference !== expected) errors.push(`MAPPING_${index}_feedbackPoint_SEMANTIC_MISMATCH`);
+    });
   }
 
   private confirmedText(value: unknown): value is string {

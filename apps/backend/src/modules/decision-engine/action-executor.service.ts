@@ -9,7 +9,7 @@ import { OperationLogService } from '../operation-log/operation-log.service';
 import { SafetyService } from '../safety/safety.service';
 import { ActionPlanExecutionMode } from './dto/execute-action-plan.dto';
 import { isDangerousStart, isStopAction } from '@agrios/edge-core';
-import { aggregatePhysicalStatus, resultExecutionStatus } from '../execution/physical-confirmation';
+import { aggregatePhysicalStatus, resultExecutionStatus, TrustedPhysicalEvidence } from '../execution/physical-confirmation';
 
 interface ActionPlanExecutionContext {
   mode?: ActionPlanExecutionMode;
@@ -125,12 +125,23 @@ export class ActionExecutorService implements OnModuleInit {
     if (!tenantId) throw new ForbiddenException('Authenticated tenant context required');
     const execution = await (this.prisma as any).actionExecution.findFirst({ where: { id: executionId, actionPlan: { tenantId } } });
     if (!execution) throw new NotFoundException('Action execution not found');
+    if (feedback.status === 'PHYSICALLY_CONFIRMED') throw new ForbiddenException('HUMAN_PHYSICAL_CONFIRMATION_FORBIDDEN');
+    await this.operationLogService.create({ action: 'ACTION_EXECUTION_DIAGNOSTIC_FEEDBACK', targetType: 'ActionExecution', targetId: executionId, description: 'Non-authoritative human diagnostic feedback', metadata: { requestedStatus: feedback.status, message: feedback.message, payload: feedback.payload, authoritative: false } as any });
+    return (this.prisma as any).actionExecution.update({ where: { id: executionId }, data: { feedbackAt: new Date(), feedback: { message: feedback.message, payload: feedback.payload, authoritative: false } } });
+  }
+
+  async applyTrustedPhysicalFeedback(executionId: string, evidence: TrustedPhysicalEvidence) {
+    if (!(evidence instanceof TrustedPhysicalEvidence)) throw new ForbiddenException('TRUSTED_MACHINE_EVIDENCE_REQUIRED');
+    const feedback = { status: evidence.status, message: evidence.message, payload: evidence.payload };
+    const tenantId = String(feedback.payload.tenantId ?? '');
     const supported = new Set(['PHYSICALLY_CONFIRMED', 'FEEDBACK_MISMATCH', 'FEEDBACK_TIMEOUT', 'OUTCOME_UNKNOWN', 'FAILED']);
     if (!feedback.status || !supported.has(feedback.status)) throw new BadRequestException('UNSUPPORTED_FEEDBACK_STATUS');
     const status = feedback.status;
     const payload = feedback.payload ?? {};
+    const execution = await (this.prisma as any).actionExecution.findFirst({ where: { id: executionId, tenantId } });
+    if (!execution) throw new NotFoundException('Action execution not found');
     const identity = execution.result?.identity ?? {};
-    if (payload.commandId !== execution.requestId || payload.deviceId !== execution.deviceId || payload.tenantId !== tenantId || (identity.farmId && payload.farmId !== identity.farmId)) {
+    if (payload.commandId !== execution.requestId || payload.deviceId !== execution.deviceId || payload.tenantId !== tenantId || (identity.tenantId && tenantId !== identity.tenantId) || (identity.farmId && payload.farmId !== identity.farmId)) {
       throw new BadRequestException('FEEDBACK_IDENTITY_MISMATCH');
     }
     if (execution.status === 'PHYSICALLY_CONFIRMED') {

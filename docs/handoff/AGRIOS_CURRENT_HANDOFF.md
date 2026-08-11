@@ -23,11 +23,16 @@
 - P0 Safety Closure Batch 2: COMPLETE
 - P0 Safety Closure Batch 2.1 final safety dispatch correction: COMPLETE
 - P0 Safety Closure Batch 3 SOFTWARE: COMPLETE
+- P0 Safety Closure Batch 3.1 physical-evidence trust hardening: COMPLETE
 - P0 SOFTWARE SAFETY CLOSURE: COMPLETE
 - Auth coverage for platform and physical-control entry points: HARDENED
 - Tenant, approval and action-plan isolation: HARDENED
 - Unsafe client `force` safety bypass: REMOVED
 - Trusted RequestContext identity: VERIFIED JWT + database principal only
+- Human JWT physical confirmation: BLOCKED (diagnostic feedback only)
+- Trusted Edge feedback ingestion: NOT_YET_IMPLEMENTED
+- Physical-confirmation migration on existing MySQL 8.4.9 baseline: PASS
+- Clean-database historical migration bootstrap: BLOCKED by pre-existing missing baseline tables
 
 ## Current safety state
 
@@ -45,6 +50,8 @@
 - Real hardware bench
 - LoRaWAN/4G field link
 - Single-Zone field test
+- Trusted authenticated Edge-to-Backend physical-feedback ingestion
+- Clean-database Prisma migration baseline/bootstrap repair
 
 ## Recommended continuation
 
@@ -65,7 +72,7 @@ Do not create a real profile or enable writes until the official documentation, 
 
 ```text
 branch: fix/agrios-p0-physical-confirmation
-commit: continue from fix/agrios-p0-physical-confirmation after its validated Batch 3 commit
+commit: continue from the validated Batch 3.1 commit on fix/agrios-p0-physical-confirmation
 ```
 
 This handoff does not claim `FIELD READY = YES`. The next hardware step remains controlled REAL LOGO read-only commissioning after nameplate, firmware, project backup, official Modbus documentation, actual I/O and manually verified mapping are available.

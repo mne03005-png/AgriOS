@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { CoreModbusTcpTransport, PlcTransportPort } from '@agrios/edge-core';
+import { canonicalPlcLogicalName, CoreModbusTcpTransport, expectedFeedbackLogicalName, findPlcMappingByLogicalName, isReadCapableMapping, isSupportedFeedbackMapping, isWriteCapableMapping, PlcTransportPort } from '@agrios/edge-core';
 import { EdgeConfig, loadConfig, realWriteEligible } from './config';
 import { DisabledPlcTransport, FakePlcTransport } from './device-control';
 import { FakeMqttTransport } from './fake-mqtt-transport';
@@ -24,7 +24,13 @@ async function plcTransport(config: EdgeConfig): Promise<{ transport: PlcTranspo
   if (config.plc.transport === 'FAKE') return { transport: new FakePlcTransport(), writeEligible: false };
   const eligible = realWriteEligible(config); if (!eligible || !config.plc.profilePath || !config.plc.host || !config.plc.port) return { transport: new DisabledPlcTransport(), writeEligible: false };
   let profile: any; try { profile = JSON.parse(await readFile(config.plc.profilePath, 'utf8')); } catch { return { transport: new DisabledPlcTransport(), writeEligible: false }; }
-  const valid = profile.realHardwareApproved === true && profile.testOnly !== true && Number.isInteger(profile.transport?.unitId) && Array.isArray(profile.mapping) && profile.mapping.length > 0 && profile.mapping.every((item:any)=>Number.isInteger(item.address)&&item.logicalName&&item.type&&item.functionCode&&item.functionCode!=='UNCONFIRMED'&&item.feedbackPoint&&item.feedbackPoint!=='UNCONFIRMED');
+  const valid = profile.realHardwareApproved === true && profile.testOnly !== true && Number.isInteger(profile.transport?.unitId) && Array.isArray(profile.mapping) && profile.mapping.length > 0 && profile.mapping.every((item:any)=>{
+    if(!Number.isInteger(item.address)||!item.logicalName||!item.type||!item.functionCode||item.functionCode==='UNCONFIRMED')return false;
+    if(!isWriteCapableMapping(item))return true;
+    const feedback=findPlcMappingByLogicalName(profile.mapping,item.feedbackPoint);
+    const expected=expectedFeedbackLogicalName(item.logicalName);
+    return Boolean(feedback&&feedback!==item&&(!expected||canonicalPlcLogicalName(item.feedbackPoint)===expected)&&isReadCapableMapping(feedback)&&isSupportedFeedbackMapping(feedback)&&Number.isInteger(feedback.address));
+  });
   if (!valid) return { transport: new DisabledPlcTransport(), writeEligible: false };
   return { transport: new CoreModbusTcpTransport(() => ({ host: config.plc.host!, port: config.plc.port!, unitId: profile.transport.unitId, connectTimeoutMs: 2000, commandTimeoutMs: 2000, retry: 1 }), () => true), writeEligible: true, profile };
 }

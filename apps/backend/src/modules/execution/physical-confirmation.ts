@@ -18,3 +18,15 @@ export function aggregatePhysicalStatus(executions: Array<{ status: string }>) {
   if (executions.length > 0 && executions.every((item) => item.status === PHYSICAL_CONFIRMED || item.status === 'SKIPPED')) return 'CONFIRMED';
   return 'AWAITING_CONFIRMATION';
 }
+
+export class TrustedPhysicalEvidence {
+  private constructor(readonly status: 'PHYSICALLY_CONFIRMED' | 'FEEDBACK_MISMATCH' | 'FEEDBACK_TIMEOUT' | 'OUTCOME_UNKNOWN' | 'FAILED', readonly message: string | undefined, readonly payload: Record<string, unknown>) {}
+  static fromPlcReadback(input: { status: TrustedPhysicalEvidence['status']; message?: string; payload: Record<string, unknown> }) {
+    if (input.status === 'PHYSICALLY_CONFIRMED') {
+      const observedAt = Date.parse(String(input.payload.observedAt ?? ''));
+      if (input.payload.physicalConfirmed !== true || input.payload.source !== 'MODBUS_TCP' || !Number.isFinite(observedAt)
+        || input.payload.expectedState === undefined || input.payload.expectedState !== input.payload.observedState) throw new Error('INVALID_TRUSTED_PLC_EVIDENCE');
+    }
+    return new TrustedPhysicalEvidence(input.status, input.message, Object.freeze({ ...input.payload }));
+  }
+}
