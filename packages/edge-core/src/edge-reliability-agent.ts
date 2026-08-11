@@ -13,29 +13,29 @@ export class EdgeReliabilityAgent {
   private queuePeakDepth = 0;
   private lastSeen = new Date().toISOString();
 
-  constructor(private readonly store: PersistentEdgeStore, private readonly cloud: EdgeCloudTransport, private readonly scope: { tenantId: string; farmId: string; deviceIds: string[] }, private readonly options = { batchSize: 50, retryDelayMs: 100, maxBackoffMs: 30_000 }) {}
+  constructor(private readonly store: PersistentEdgeStore, private readonly cloud: EdgeCloudTransport, private readonly scope: { edgeId: string; tenantId: string; farmId: string; deviceIds: string[] }, private readonly options = { batchSize: 50, retryDelayMs: 100, maxBackoffMs: 30_000 }) {}
 
-  async captureTelemetry(input: { messageId?: string; deviceId: string; tenantId: string; farmId: string; timestamp: string; sequence?: number; payload: Record<string, unknown> }) {
+  async captureTelemetry(input: { messageId?: string; edgeId: string; deviceId: string; tenantId: string; farmId: string; timestamp: string; sequence?: number; payload: Record<string, unknown> }) {
     this.assertScope(input);
     if (!input.payload || typeof input.payload !== 'object' || Array.isArray(input.payload) || Object.keys(input.payload).length === 0) throw new Error('EDGE_TELEMETRY_MALFORMED');
     const messageId = input.messageId ?? this.deriveMessageId(input.deviceId, input.sequence, input.timestamp);
     const quality = this.quality(input.deviceId, input.sequence, input.timestamp);
-    const item: EdgeTelemetryEnvelope = { messageId, deviceId: input.deviceId, tenantId: input.tenantId, farmId: input.farmId, deviceTimestamp: input.timestamp, edgeReceivedAt: new Date().toISOString(), sequence: input.sequence, payload: input.payload, quality, priority: 'TELEMETRY', createdAt: new Date().toISOString(), attemptCount: 0, status: 'PENDING' };
+    const item: EdgeTelemetryEnvelope = { messageId, edgeId: input.edgeId, deviceId: input.deviceId, tenantId: input.tenantId, farmId: input.farmId, deviceTimestamp: input.timestamp, edgeReceivedAt: new Date().toISOString(), sequence: input.sequence, payload: input.payload, quality, priority: 'TELEMETRY', createdAt: new Date().toISOString(), attemptCount: 0, status: 'PENDING' };
     const result = await this.store.enqueueTelemetry(item);
     if (input.sequence !== undefined) await this.store.rememberSequence(input.deviceId, input.sequence);
     this.updatePeak(); this.lastSeen = item.edgeReceivedAt; return result;
   }
 
-  async receiveCommand(input: { commandId: string; deviceId: string; tenantId: string; farmId: string; action: string; expiresAt: string; signatureValid: boolean }, execute: () => Promise<Record<string, unknown>>) {
+  async receiveCommand(input: { commandId: string; edgeId: string; deviceId: string; tenantId: string; farmId: string; action: string; expiresAt: string; signatureValid: boolean }, execute: () => Promise<Record<string, unknown>>) {
     this.assertScope(input); if (!input.signatureValid) throw new Error('EDGE_COMMAND_INVALID_HMAC');
     const existing = this.store.command(input.commandId); if (existing) return { duplicate: true, record: existing };
-    const dangerous = ['PUMP_ON', 'VALVE_OPEN'].includes(input.action);
+    const dangerous = ['PUMP_ON', 'VALVE_OPEN', 'IRRIGATION_START'].includes(input.action);
     const expired = Date.parse(input.expiresAt) <= Date.now();
     const record: EdgeCommandRecord = { ...input, receivedAt: new Date().toISOString(), ackStatus: expired && dangerous ? 'EXPIRED' : 'PENDING' };
     if (expired && dangerous) record.result = { status: 'EXPIRED', executed: false };
     else { record.result = await execute(); record.executedAt = new Date().toISOString(); record.ackStatus = 'ACKNOWLEDGED'; }
     await this.store.saveCommand(record);
-    await this.store.enqueueAck({ commandId: input.commandId, deviceId: input.deviceId, tenantId: input.tenantId, farmId: input.farmId, status: String(record.result?.status ?? record.ackStatus), feedback: record.result, timestamp: new Date().toISOString(), signatureMetadata: { algorithm: 'HMAC-SHA256' }, priority: input.action.includes('STOP') ? 'CRITICAL' : 'CONTROL', attemptCount: 0, queueStatus: 'PENDING' });
+    await this.store.enqueueAck({ commandId: input.commandId, edgeId: input.edgeId, deviceId: input.deviceId, tenantId: input.tenantId, farmId: input.farmId, status: String(record.result?.status ?? record.ackStatus), feedback: record.result, timestamp: new Date().toISOString(), signatureMetadata: { algorithm: 'HMAC-SHA256' }, priority: input.action.includes('STOP') ? 'CRITICAL' : 'CONTROL', attemptCount: 0, queueStatus: 'PENDING' });
     this.updatePeak(); return { duplicate: false, record };
   }
 
@@ -64,6 +64,6 @@ export class EdgeReliabilityAgent {
     return 'GOOD';
   }
   private deriveMessageId(deviceId: string, sequence: number | undefined, timestamp: string) { return createHash('sha256').update(`${deviceId}:${sequence ?? 'missing'}:${timestamp}`).digest('hex'); }
-  private assertScope(input: { tenantId: string; farmId: string; deviceId: string }) { if (input.tenantId !== this.scope.tenantId) throw new Error('EDGE_TENANT_SCOPE_MISMATCH'); if (input.farmId !== this.scope.farmId) throw new Error('EDGE_FARM_SCOPE_MISMATCH'); if (!this.scope.deviceIds.includes(input.deviceId)) throw new Error('EDGE_DEVICE_SCOPE_MISMATCH'); }
+  private assertScope(input: { edgeId: string; tenantId: string; farmId: string; deviceId: string }) { if (input.edgeId !== this.scope.edgeId) throw new Error('EDGE_ID_SCOPE_MISMATCH'); if (input.tenantId !== this.scope.tenantId) throw new Error('EDGE_TENANT_SCOPE_MISMATCH'); if (input.farmId !== this.scope.farmId) throw new Error('EDGE_FARM_SCOPE_MISMATCH'); if (!this.scope.deviceIds.includes(input.deviceId)) throw new Error('EDGE_DEVICE_SCOPE_MISMATCH'); }
   private updatePeak() { this.queuePeakDepth = Math.max(this.queuePeakDepth, this.store.pendingDepth()); }
 }

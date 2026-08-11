@@ -1,0 +1,44 @@
+{
+  "edgeId": "example-edge-01",
+  "tenantId": "example-tenant-id",
+  "farmId": "example-farm-id",
+  "allowedDeviceIds": ["example-sensor-01", "example-plc-01"],
+  "softwareVersion": "0.1.0",
+  "configVersion": "1",
+  "mqtt": {
+    "host": "localhost",
+    "port": 8883,
+    "tls": true,
+    "clientId": "example-edge-01",
+    "caPath": "/etc/agrios-edge/credentials/ca.crt",
+    "certPath": "/etc/agrios-edge/credentials/edge.crt",
+    "keyPath": "/etc/agrios-edge/credentials/edge.key",
+    "hmacKeyPath": "/etc/agrios-edge/credentials/command-hmac.key",
+    "telemetryTopic": "agrios/device/{deviceId}/telemetry",
+    "commandsTopic": "agrios/device/+/command",
+    "acksTopic": "agrios/device/{deviceId}/ack",
+    "healthTopic": "agrios/edge/example-edge-01/status"
+  },
+  "storage": {
+    "path": "/var/lib/agrios-edge/edge-store.json",
+    "maxQueueSize": 10000,
+    "maxStorageBytes": 67108864,
+    "retentionMs": 2592000000
+  },
+  "reconnect": {
+    "initialDelayMs": 1000,
+    "maxDelayMs": 30000,
+    "jitter": 0.25
+  },
+  "plc": {
+    "transport": "FAKE",
+    "host": null,
+    "port": null,
+    "profilePath": null,
+    "realProfileApproved": false
+  },
+  "safety": {
+    "realWriteEnabled": false
+  },
+  "healthIntervalMs": 30000
+}

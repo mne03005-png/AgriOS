@@ -3,9 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { EdgeCloudTransport, EdgeReliabilityAgent } from '../src/modules/edge-reliability/edge-reliability-agent';
-import { PersistentEdgeStore } from '../src/modules/edge-reliability/persistent-edge-store';
-import { EdgeAckRecord, EdgeTelemetryEnvelope } from '../src/modules/edge-reliability/edge-reliability.types';
+import { EdgeAckRecord, EdgeCloudTransport, EdgeReliabilityAgent, EdgeTelemetryEnvelope, PersistentEdgeStore } from '@agrios/edge-core';
 
 class FakeCloud implements EdgeCloudTransport {
   online = false;
@@ -28,7 +26,7 @@ class FakeCloud implements EdgeCloudTransport {
 
 const tests: Array<{ name: string; pass: boolean }> = [];
 const check = (name: string, condition: unknown) => { assert.ok(condition, name); tests.push({ name, pass: true }); };
-const scope = { tenantId: 'tenant-edge', farmId: 'farm-edge', deviceIds: ['sensor-1', 'plc-1'] };
+const scope = { edgeId: 'edge-test', tenantId: 'tenant-edge', farmId: 'farm-edge', deviceIds: ['sensor-1', 'plc-1'] };
 
 async function run() {
   const startedAt = Date.now();
@@ -77,7 +75,7 @@ async function run() {
     while (store.pendingDepth()) await agent.replay();
 
     let physicalExecutions = 0;
-    const command = { commandId: 'command-1', deviceId: 'plc-1', tenantId: scope.tenantId, farmId: scope.farmId, action: 'PUMP_OFF', expiresAt: new Date(Date.now() + 60_000).toISOString(), signatureValid: true };
+    const command = { commandId: 'command-1', edgeId: scope.edgeId, deviceId: 'plc-1', tenantId: scope.tenantId, farmId: scope.farmId, action: 'PUMP_OFF', expiresAt: new Date(Date.now() + 60_000).toISOString(), signatureValid: true };
     await agent.receiveCommand(command, async () => { physicalExecutions += 1; return { status: 'SUCCEEDED' }; });
     await agent.receiveCommand(command, async () => { physicalExecutions += 1; return { status: 'SUCCEEDED' }; });
     check('15 duplicate commandId', physicalExecutions === 1);
@@ -139,6 +137,6 @@ async function run() {
   } finally { await rm(directory, { recursive: true, force: true }); }
 }
 
-function telemetry(sequence: number) { return { messageId: `edge-message-${sequence}`, deviceId: 'sensor-1', tenantId: scope.tenantId, farmId: scope.farmId, timestamp: new Date(Date.now() + sequence).toISOString(), sequence, payload: { soilMoisture: 40 + sequence % 10 } }; }
+function telemetry(sequence: number) { return { messageId: `edge-message-${sequence}`, edgeId: scope.edgeId, deviceId: 'sensor-1', tenantId: scope.tenantId, farmId: scope.farmId, timestamp: new Date(Date.now() + sequence).toISOString(), sequence, payload: { soilMoisture: 40 + sequence % 10 } }; }
 function git(...args: string[]) { return execFileSync('git', args, { encoding: 'utf8' }).trim(); }
 void run().catch((error) => { console.error(error); process.exitCode = 1; });

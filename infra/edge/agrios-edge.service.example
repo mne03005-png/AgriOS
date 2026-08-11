@@ -1,0 +1,31 @@
+[Unit]
+Description=AgriOS Edge Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=agrios-edge
+Group=agrios-edge
+WorkingDirectory=/opt/agrios
+EnvironmentFile=/etc/agrios-edge/edge-agent.env
+ExecStart=/usr/bin/node /opt/agrios/apps/edge-agent/dist/main.js
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+ReadWritePaths=/var/lib/agrios-edge
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

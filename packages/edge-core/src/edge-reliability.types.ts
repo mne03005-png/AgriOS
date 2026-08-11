@@ -4,6 +4,7 @@ export type EdgeTelemetryQuality = 'GOOD' | 'DUPLICATE' | 'OUT_OF_ORDER' | 'LATE
 
 export interface EdgeTelemetryEnvelope {
   messageId: string;
+  edgeId: string;
   deviceId: string;
   tenantId: string;
   farmId: string;
@@ -21,6 +22,7 @@ export interface EdgeTelemetryEnvelope {
 
 export interface EdgeCommandRecord {
   commandId: string;
+  edgeId: string;
   deviceId: string;
   tenantId: string;
   farmId: string;
@@ -34,6 +36,7 @@ export interface EdgeCommandRecord {
 
 export interface EdgeAckRecord {
   commandId: string;
+  edgeId: string;
   deviceId: string;
   tenantId: string;
   farmId: string;
