@@ -32,6 +32,7 @@
     ,"test:p0-safety-dispatch-closure": "ts-node scripts/verify-p0-safety-dispatch-closure.ts"
     ,"test:p0-physical-confirmation": "ts-node scripts/verify-p0-physical-confirmation.ts"
     ,"test:mysql-migrations": "prisma migrate deploy && node scripts/verify-mysql-migrations.mjs"
+    ,"test:r1b-control-entry": "ts-node scripts/verify-r1b-control-entry-convergence.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

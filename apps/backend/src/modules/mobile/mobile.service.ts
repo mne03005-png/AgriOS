@@ -1,8 +1,9 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthenticatedRequest } from '../auth/jwt-auth.guard';
 import { SafetyService } from '../safety/safety.service';
-import { DeviceControlService } from '../device-control/device-control.service';
+import { ActionQueueService } from '../action-queue/action-queue.service';
 
 type MobileUser = NonNullable<AuthenticatedRequest['user']>;
 
@@ -11,7 +12,7 @@ export class MobileService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly safetyService: SafetyService,
-    private readonly deviceControlService: DeviceControlService
+    private readonly moduleRef: ModuleRef
   ) {}
 
   async cockpit(farmId: string, user: MobileUser) {
@@ -266,8 +267,23 @@ export class MobileService {
     const device = await this.prisma.device.findFirst({ where: { id: body.deviceId, ...this.tenantWhere(user) }, include: { field: true } });
     if (!device) throw new ForbiddenException('Device is outside current tenant');
     if (user.farmId && device.field?.farmId !== user.farmId) throw new ForbiddenException('Device is outside current farm');
-    return this.deviceControlService.send(body.deviceId, { command: body.command, remark: body.remark });
+    if (!device.fieldId || !device.field?.farmId) throw new ForbiddenException('Device must be bound to a field and farm');
+    const tenantId = user.tenantId ?? device.tenantId;
+    if (!tenantId || device.tenantId !== tenantId || device.field.tenantId !== tenantId) throw new ForbiddenException('Device is outside current tenant');
+    const decision = await (this.prisma as any).decisionRecord.create({ data: {
+      tenantId, fieldId: device.fieldId, decisionType: 'DEVICE_HEALTH', recommendation: 'CHECK_DEVICE', confidence: 1,
+      reason: `Mobile valve ${body.command} request`, status: 'PLANNED', metadata: { source: 'MOBILE', deviceId: device.id, remark: body.remark }
+    } });
+    const actionPlan = await (this.prisma as any).actionPlan.create({ data: {
+      tenantId, decisionId: decision.id, fieldId: device.fieldId, status: 'PLANNED',
+      actions: [{ type: 'DEVICE_COMMAND', deviceId: device.id, command: body.command, farmId: device.field.farmId, fieldId: device.fieldId, payload: { source: 'MOBILE', remark: body.remark } }],
+      safety: { source: 'MOBILE', requiresQueue: true }
+    } });
+    const queueJob = await this.actionQueue().enqueue({ farmId: device.field.farmId, actionPlanId: actionPlan.id });
+    return { accepted: true, queued: true, executed: false, physicalConfirmed: false, status: 'QUEUED', actionPlanId: actionPlan.id, queueJobId: queueJob.id };
   }
+
+  private actionQueue() { return this.moduleRef.get(ActionQueueService, { strict: false }); }
 
   private tenantWhere(user: MobileUser) {
     return user.role === 'PLATFORM_ADMIN' ? {} : { tenantId: user.tenantId };

@@ -5,7 +5,6 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RequestContextService } from '../../common/request-context.service';
 import { AuditService } from '../audit/audit.service';
 import { EventBusService } from '../event-bus/event-bus.service';
-import { DeviceControlService } from './device-control.service';
 import {
   ValveAckStatus,
   ValveCommandAck,
@@ -29,8 +28,7 @@ export class ValveControlService {
     private readonly config: ConfigService,
     private readonly requestContext: RequestContextService,
     private readonly audit: AuditService,
-    private readonly eventBus: EventBusService,
-    private readonly deviceControl: DeviceControlService
+    private readonly eventBus: EventBusService
   ) {}
 
   requestOpenValve(deviceId: string, dto: ValveDryRunDto = {}) {
@@ -182,6 +180,7 @@ export class ValveControlService {
       });
       throw new ForbiddenException({ errorCode: safety.errorCode, reasons: safety.reasons });
     }
+    if (!dryRun) throw new ForbiddenException({ errorCode: 'APPROVAL_RELEASE_NOT_IMPLEMENTED', reasons: ['APPROVAL_REQUIRED'] });
 
     const commandId = `valve-${randomUUID()}`;
     const timeoutMs = this.valveCommandTimeoutMs();
@@ -204,78 +203,28 @@ export class ValveControlService {
     const decision = await this.createValveDecision(device, request);
     const actionPlan = await this.createValveActionPlan(device, decision.id, request, safety);
     const approval = await this.createDryRunApproval(device, actionPlan.id, decision.id, request);
-    const queueJob = await (this.prisma as any).actionQueueJob.create({
-      data: {
-        tenantId: request.tenantId,
-        farmId: request.farmId,
-        actionPlanId: actionPlan.id,
-        status: 'QUEUED',
-        maxRetries: 0
-      }
-    });
-    const deviceCommand = await (this.prisma as any).deviceCommand.create({
-      data: {
-        tenantId: request.tenantId,
-        deviceId: device.id,
-        command: request.commandType,
-        payload: { request, safety, dryRun, approvalId: approval.id },
-        status: dryRun ? 'ACKED' : 'SENT',
-        mqttTopic: this.commandTopic(request),
-        requestId: commandId,
-        sentAt: new Date(),
-        ackAt: dryRun ? new Date() : undefined
-      }
-    });
-    const execution = await (this.prisma as any).actionExecution.create({
-      data: {
-        tenantId: request.tenantId,
-        actionPlanId: actionPlan.id,
-        deviceId: device.id,
-        command: `VALVE_${request.commandType}`,
-        status: dryRun ? 'ACKED' : 'SENT',
-        requestId: commandId,
-        result: {
-          dryRun,
-          commandId,
-          queueJobId: queueJob.id,
-          deviceCommandId: deviceCommand.id,
-          simulatedAck: dryRun
-        },
-        executedAt: new Date(),
-        feedbackAt: dryRun ? new Date() : undefined,
-        feedback: dryRun ? this.simulatedAck(request) : undefined
-      }
-    });
+    await this.applyDryRunValveState(device, request);
 
-    await (this.prisma as any).actionQueueJob.update({ where: { id: queueJob.id }, data: { actionExecutionId: execution.id } });
-    if (dryRun) {
-      await this.applyDryRunValveState(device, request);
-    } else {
-      await this.deviceControl.send(device.id, {
-        command: this.toDeviceControlCommand(request.commandType),
-        payload: { ...request },
-        remark: 'P13.2 valve real-control path after safety and queue records'
-      });
-    }
-
-    await this.recordValveEvent('valve.command.requested', 'INFO', device.id, { commandId, queueJobId: queueJob.id, dryRun, commandType: request.commandType });
+    await this.recordValveEvent('valve.command.requested', 'INFO', device.id, { commandId, dryRun, simulated: true, commandType: request.commandType });
     await this.audit.record({
       eventType: 'valve.command.requested',
       severity: 'INFO',
       entityType: 'Device',
       entityId: device.id,
-      payload: { commandId, queueJobId: queueJob.id, dryRun, commandType: request.commandType, safety }
+      payload: { commandId, dryRun, simulated: true, commandType: request.commandType, safety }
     });
 
     return {
       commandId,
-      queueJobId: queueJob.id,
       dryRun,
+      accepted: true,
+      queued: false,
+      executed: false,
+      physicalConfirmed: false,
+      status: 'DRY_RUN_SIMULATED',
       safety,
-      approval: { id: approval.id, status: approval.status, demoApproval: dryRun },
-      deviceCommandId: deviceCommand.id,
-      actionExecutionId: execution.id,
-      ack: dryRun ? this.simulatedAck(request) : null
+      approval: { id: approval.id, status: approval.status, demoApproval: true },
+      ack: this.simulatedAck(request)
     };
   }
 
@@ -322,8 +271,10 @@ export class ValveControlService {
   }
 
   private findValveDevice(deviceIdOrCode: string) {
+    const tenantId = this.requestContext.getTenantId();
+    if (!tenantId) return null;
     return (this.prisma as any).device.findFirst({
-      where: { OR: [{ id: deviceIdOrCode }, { code: deviceIdOrCode }] },
+      where: { tenantId, OR: [{ id: deviceIdOrCode }, { code: deviceIdOrCode }] },
       include: { field: true }
     });
   }
@@ -349,9 +300,9 @@ export class ValveControlService {
         tenantId: request.tenantId,
         decisionId,
         fieldId: request.fieldId,
-        status: 'EXECUTING',
-        actions: [{ type: 'VALVE_CONTROL', command: request.commandType, deviceId: device.id, commandId: request.commandId }],
-        safety
+        status: 'SKIPPED',
+        actions: [{ type: 'MANUAL_CHECK', command: request.commandType, deviceId: device.id, correlationId: request.commandId, simulated: true }],
+        safety: { ...safety, dryRun: true, simulated: true, executable: false }
       }
     });
   }
@@ -413,18 +364,6 @@ export class ValveControlService {
       valveOpeningPercent: opening,
       timestamp: new Date().toISOString()
     };
-  }
-
-  private toDeviceControlCommand(commandType: ValveCommandType) {
-    if (commandType === 'OPEN') return 'VALVE_OPEN';
-    if (commandType === 'TEST_OPEN') return 'TEST_OPEN_VALVE';
-    if (commandType === 'CLOSE') return 'VALVE_CLOSE';
-    if (commandType === 'SET_OPENING') return 'SET_VALVE_OPENING';
-    return 'SET_VALVE_OPENING';
-  }
-
-  private commandTopic(request: ValveCommandRequest) {
-    return `agrios/${request.tenantId}/${request.farmId}/devices/${request.deviceCode}/commands`;
   }
 
   private recordValveEvent(eventType: string, severity: string, deviceId: string | undefined, payload: Record<string, unknown>) {
