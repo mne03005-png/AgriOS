@@ -147,36 +147,30 @@ export class ExecutionResultLinkerService {
   }
 
   private async linkFertigationTask(task: any, plan: any, payload: any) {
-    if (payload.status === 'SUCCESS') {
-      const claim = await (this.prisma as any).fertigationTask.updateMany({ where: { id: task.id, status: { not: 'SUCCESS' } }, data: { status: 'SUCCESS', finishedAt: new Date() } });
-      if (claim.count !== 1) return (this.prisma as any).fertigationTask.findUnique({ where: { id: task.id } });
-    }
     const actions = Array.isArray(plan.actions) ? plan.actions : [];
     const firstPayload = actions[0]?.payload ?? {};
-    const tank = task.tankId ? await (this.prisma as any).fertilizerTank.findUnique({ where: { id: task.tankId } }) : null;
-    const targetFertilizerVolume = Number(task.targetFertilizerVolume ?? firstPayload.targetFertilizerVolume ?? 0);
-    const tankBeforeLevel = Number(tank?.currentLevelL ?? 0);
-    const tankAfterLevel = tank ? Math.max(tankBeforeLevel - targetFertilizerVolume, 0) : null;
-    const completionAlreadyApplied = task.resultJson?.physicalCompletionApplied === true;
-    if (tank && payload.status === 'SUCCESS' && !completionAlreadyApplied) {
-      await (this.prisma as any).fertilizerTank.update({ where: { id: tank.id }, data: { currentLevelL: tankAfterLevel } });
+    let updated: any;
+    let resultJson: any;
+    if (payload.status === 'SUCCESS') {
+      const completion = await this.completeFertigationInventory(task.id, plan, payload, firstPayload);
+      if (!completion.applied) return completion.task;
+      updated = completion.task;
+      resultJson = updated.resultJson;
+    } else {
+      resultJson = {
+        ...(task.resultJson ?? {}),
+        durationMinutes: task.durationMinutes ?? firstPayload.durationMinutes,
+        targetWaterVolume: Number(task.targetWaterVolume ?? firstPayload.targetWaterVolume ?? 0),
+        targetFertilizerVolume: Number(task.targetFertilizerVolume ?? firstPayload.targetFertilizerVolume ?? 0),
+        actionPlanId: plan.id,
+        queueJobId: payload.queueJobId,
+        physicalCompletionApplied: task.resultJson?.physicalCompletionApplied === true
+      };
+      updated = await (this.prisma as any).fertigationTask.update({
+        where: { id: task.id },
+        data: { status: payload.status, finishedAt: new Date(), resultJson }
+      });
     }
-    const resultJson = {
-      ...(task.resultJson ?? {}),
-      durationMinutes: task.durationMinutes ?? firstPayload.durationMinutes,
-      targetWaterVolume: Number(task.targetWaterVolume ?? firstPayload.targetWaterVolume ?? 0),
-      targetFertilizerVolume,
-      tankBeforeLevel,
-      tankAfterLevel,
-      anomalies: [],
-      actionPlanId: plan.id,
-      queueJobId: payload.queueJobId,
-      physicalCompletionApplied: payload.status === 'SUCCESS' || completionAlreadyApplied
-    };
-    const updated = await (this.prisma as any).fertigationTask.update({
-      where: { id: task.id },
-      data: { status: payload.status, finishedAt: new Date(), resultJson }
-    });
     await this.upsertReport({ tenantId: task.tenantId, farmId: task.farmId, type: 'FERTIGATION', refId: task.id, title: '水肥执行报告', summaryJson: { taskId: task.id, fieldId: task.fieldId }, metricsJson: resultJson });
     if (payload.status === 'SUCCESS') {
       await this.createActivityOnce({ tenantId: task.tenantId, farmId: task.farmId, fieldId: task.fieldId, type: 'FERTIGATION_COMPLETED', title: '水肥任务完成', refType: 'FertigationTask', refId: task.id, metadata: resultJson });
@@ -184,6 +178,80 @@ export class ExecutionResultLinkerService {
     }
     this.eventBus.publish('execution.result.fertigation.linked', { farmId: task.farmId, fieldId: task.fieldId, taskId: task.id, status: payload.status }, task.tenantId);
     return updated;
+  }
+
+  private async completeFertigationInventory(taskId: string, plan: any, payload: any, firstPayload: any) {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        return await (this.prisma as any).$transaction(async (tx: any) => {
+          const current = await tx.fertigationTask.findUnique({ where: { id: taskId } });
+          if (!current) throw new Error('Fertigation task not found during completion');
+          if (current.resultJson?.physicalCompletionApplied === true) return { task: current, applied: false };
+          const claimed = await tx.fertigationTask.updateMany({
+            where: { id: taskId, status: { not: 'SUCCESS' } },
+            data: { status: 'SUCCESS', finishedAt: new Date() }
+          });
+          if (claimed.count !== 1) {
+            return { task: await tx.fertigationTask.findUnique({ where: { id: taskId } }), applied: false };
+          }
+
+          const rawTarget = current.targetFertilizerVolume ?? firstPayload.targetFertilizerVolume ?? 0;
+          const target = this.validConsumption(rawTarget);
+          const anomalies = Array.isArray(current.resultJson?.anomalies) ? [...current.resultJson.anomalies] : [];
+          if (!target) anomalies.push('INVALID_TARGET_FERTILIZER_VOLUME');
+          const tank = current.tankId ? await tx.fertilizerTank.findFirst({
+            where: { id: current.tankId, tenantId: current.tenantId, farmId: current.farmId }
+          }) : null;
+          if (!current.tankId) anomalies.push('FERTILIZER_TANK_NOT_ASSIGNED');
+          else if (!tank) anomalies.push('FERTILIZER_TANK_NOT_FOUND_OR_SCOPE_MISMATCH');
+
+          let tankBeforeLevel: number | null = null;
+          let tankAfterLevel: number | null = null;
+          if (tank) {
+            const before = new Prisma.Decimal(tank.currentLevelL ?? 0);
+            const requested = target ?? new Prisma.Decimal(0);
+            const decrement = requested.greaterThan(before) ? before : requested;
+            const after = before.minus(decrement);
+            tankBeforeLevel = before.toNumber();
+            tankAfterLevel = after.toNumber();
+            if (target?.greaterThan(before)) anomalies.push('INSUFFICIENT_RECORDED_FERTILIZER_STOCK');
+            if (decrement.greaterThan(0)) {
+              await tx.fertilizerTank.update({ where: { id: tank.id }, data: { currentLevelL: { decrement } } });
+            }
+          }
+
+          const resultJson = {
+            ...(current.resultJson ?? {}),
+            durationMinutes: current.durationMinutes ?? firstPayload.durationMinutes,
+            targetWaterVolume: Number(current.targetWaterVolume ?? firstPayload.targetWaterVolume ?? 0),
+            targetFertilizerVolume: target?.toNumber() ?? null,
+            tankBeforeLevel,
+            tankAfterLevel,
+            anomalies,
+            actionPlanId: plan.id,
+            queueJobId: payload.queueJobId,
+            physicalCompletionApplied: true
+          };
+          const updated = await tx.fertigationTask.update({
+            where: { id: taskId },
+            data: { status: 'SUCCESS', finishedAt: new Date(), resultJson }
+          });
+          return { task: updated, applied: true };
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2034' || attempt === 3) throw error;
+      }
+    }
+    throw new Error('Fertigation completion transaction retry exhausted');
+  }
+
+  private validConsumption(value: unknown) {
+    try {
+      const decimal = new Prisma.Decimal(value as any);
+      return decimal.isFinite() && !decimal.isNegative() ? decimal : null;
+    } catch {
+      return null;
+    }
   }
 
   private async linkDissolveTask(task: any, plan: any, payload: any) {
