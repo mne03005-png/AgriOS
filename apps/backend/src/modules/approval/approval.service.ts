@@ -76,7 +76,9 @@ export class ApprovalService {
   }
 
   private async findOne(id: string) {
-    const item = await (this.prisma as any).approvalRequest.findUnique({ where: { id } });
+    const tenantId = this.requestContext.getTenantId();
+    if (!tenantId) throw new NotFoundException('Approval request not found');
+    const item = await (this.prisma as any).approvalRequest.findFirst({ where: { id, tenantId } });
     if (!item) throw new NotFoundException('Approval request not found');
     return item;
   }

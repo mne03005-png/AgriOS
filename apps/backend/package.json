@@ -27,6 +27,7 @@
     "plc:commissioning": "ts-node scripts/agrios-plc-commissioning.ts",
     "test:p0-logo-automation": "ts-node scripts/verify-p0-logo-bench-automation.ts",
     "test:p0-edge-reliability": "ts-node scripts/verify-p0-edge-reliability.ts"
+    ,"test:p0-auth-control-entry": "ts-node scripts/verify-p0-auth-control-entry.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

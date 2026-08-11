@@ -13,6 +13,7 @@ export const PERMISSIONS = {
   SAFETY_MANAGE: 'safety.manage',
   APPROVAL_APPROVE: 'approval.approve',
   ACTION_EXECUTE: 'action.execute',
+  ACTION_POLICY_OVERRIDE: 'action.policy.override',
   ACTION_CANCEL: 'action.cancel',
   EDGE_MANAGE: 'edge.manage',
   BLUETOOTH_MAINTAIN: 'bluetooth.maintain',

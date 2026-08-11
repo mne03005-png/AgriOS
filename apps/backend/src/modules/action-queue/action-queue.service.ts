@@ -111,7 +111,7 @@ export class ActionQueueService implements OnModuleDestroy {
     });
     if (claimed.count !== 1) return;
     try {
-      const plan = await this.actionExecutor.executePlan(job.actionPlanId);
+      const plan = await this.actionExecutor.executePlan(job.actionPlanId, { tenantId: job.tenantId });
       const updatedJob = await (this.prisma as any).actionQueueJob.update({
         where: { id },
         data: { status: 'SUCCESS', finishedAt: new Date(), actionExecutionId: plan.executions?.[0]?.id }

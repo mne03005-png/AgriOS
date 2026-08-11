@@ -40,13 +40,13 @@ export class SafetyService {
       await (this.prisma as any).actionPlan.update({ where: { id: actionPlan.id }, data: { status: 'BLOCKED', safety: { ...safety, blocks, warnings } } });
       await this.createApproval(actionPlan, blocks.join(', '));
       this.eventBus.publish('safety.blocked', { actionPlanId: actionPlan.id, fieldId: actionPlan.fieldId, blocks }, this.requestContext.getTenantId());
-      return { allowed: false, status: 'BLOCKED', blocks, warnings };
+      return { allowed: false, status: 'BLOCKED', blocks, hardBlocks: blocks, softBlocks: warnings, warnings };
     }
     if (warnings.length > 0 && options.autoExecute) {
       await (this.prisma as any).actionPlan.update({ where: { id: actionPlan.id }, data: { status: 'PENDING_APPROVAL', safety: { ...safety, blocks, warnings } } });
-      return { allowed: false, status: 'PENDING_APPROVAL', blocks, warnings };
+      return { allowed: false, status: 'PENDING_APPROVAL', blocks, hardBlocks: blocks, softBlocks: warnings, warnings };
     }
-    return { allowed: true, status: 'PASS', blocks, warnings };
+    return { allowed: true, status: 'PASS', blocks, hardBlocks: blocks, softBlocks: warnings, warnings };
   }
 
   createPolicy(dto: CreateSafetyPolicyDto) {

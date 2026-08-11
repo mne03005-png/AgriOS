@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CanonicalRole, canonicalRoleFor, effectivePermissionsFor } from '../../common/permissions/canonical-role';
+import { RequestContextService } from '../../common/request-context.service';
 
 export interface AuthenticatedRequest {
   headers: Record<string, string | string[] | undefined>;
@@ -20,7 +21,8 @@ export interface AuthenticatedRequest {
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly jwtService: JwtService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly requestContext: RequestContextService
   ) {}
 
   async canActivate(context: ExecutionContext) {
@@ -54,6 +56,12 @@ export class JwtAuthGuard implements CanActivate {
       effectivePermissions: effectivePermissionsFor(user.role),
       tokenVersion: user.tokenVersion
     };
+    this.requestContext.setAuthenticatedPrincipal({
+      userId: user.id,
+      tenantId: user.tenantId ?? undefined,
+      farmId: user.farmId ?? undefined,
+      role: user.role
+    });
     return true;
   }
 }

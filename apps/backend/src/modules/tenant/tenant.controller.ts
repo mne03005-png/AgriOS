@@ -1,11 +1,18 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
 import { TenantService } from './tenant.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { TenantGuard } from '../../common/tenant/tenant.guard';
+import { PermissionsGuard } from '../../common/permissions/permissions.guard';
+import { Permissions } from '../../common/permissions/permissions.decorator';
+import { PERMISSIONS } from '../../common/permissions/permission.constants';
 
 @ApiTags('P11 租户')
 @Controller('tenants')
+@UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+@Permissions(PERMISSIONS.TENANT_MANAGE, PERMISSIONS.PLATFORM_CONTEXT)
 export class TenantController {
   constructor(private readonly tenantService: TenantService) {}
 

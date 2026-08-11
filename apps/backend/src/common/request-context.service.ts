@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-interface RequestContext {
+export interface RequestContext {
   userId?: string;
   farmId?: string;
   tenantId?: string;
@@ -15,6 +15,17 @@ export class RequestContextService {
 
   run(context: RequestContext, callback: () => void) {
     this.storage.run(context, callback);
+  }
+
+  setAuthenticatedPrincipal(context: Pick<RequestContext, 'userId' | 'farmId' | 'tenantId' | 'role'>) {
+    const store = this.storage.getStore();
+    if (!store) return;
+    Object.assign(store, context);
+  }
+
+  setAuthorizedTenant(tenantId: string) {
+    const store = this.storage.getStore();
+    if (store) store.tenantId = tenantId;
   }
 
   getUserId() {
@@ -38,6 +49,6 @@ export class RequestContextService {
   }
 
   isPlatformAdmin() {
-    return this.getRole() === 'PLATFORM_ADMIN';
+    return this.getRole() === 'PLATFORM_ADMIN' || this.getRole() === 'SUPER_ADMIN';
   }
 }

@@ -19,6 +19,11 @@
 - Duplicate physical execution: 0
 - Lost ACK: 0
 - Production dependency audit: 0 vulnerabilities
+- P0 Safety Closure Batch 1: COMPLETE
+- Auth coverage for platform and physical-control entry points: HARDENED
+- Tenant, approval and action-plan isolation: HARDENED
+- Unsafe client `force` safety bypass: REMOVED
+- Trusted RequestContext identity: VERIFIED JWT + database principal only
 
 ## Current safety state
 
@@ -28,6 +33,8 @@
 
 ## Not yet completed
 
+- P0 Safety Closure Batch 2: Emergency/STOP dispatch and priority closure
+- P0 Safety Closure Batch 3: Physical confirmation closure
 - Real MQTT TLS commissioning against a provisioned non-production broker
 - LOGO physical-device commissioning
 - Confirmed Modbus mapping
@@ -55,5 +62,5 @@ Do not create a real profile or enable writes until the official documentation, 
 
 ```text
 branch: feature/agrios-p0-edge-runtime
-commit: this handoff document's containing commit
+commit: continue from the Batch 1 security commit on fix/agrios-p0-auth-control-entry
 ```

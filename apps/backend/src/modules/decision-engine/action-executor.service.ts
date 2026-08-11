@@ -1,9 +1,19 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RequestContextService } from '../../common/request-context.service';
+import { hasPermissions } from '../../common/permissions/permission-matrix';
+import { PERMISSIONS } from '../../common/permissions/permission.constants';
 import { DeviceControlService } from '../device-control/device-control.service';
 import { ExecutionResultLinkerService } from '../execution/execution-result-linker.service';
 import { OperationLogService } from '../operation-log/operation-log.service';
 import { SafetyService } from '../safety/safety.service';
+import { ActionPlanExecutionMode } from './dto/execute-action-plan.dto';
+
+interface ActionPlanExecutionContext {
+  mode?: ActionPlanExecutionMode;
+  overrideReason?: string;
+  tenantId?: string;
+}
 
 type SupportedCommand =
   | 'PUMP_ON'
@@ -24,21 +34,32 @@ export class ActionExecutorService {
     private readonly deviceControlService: DeviceControlService,
     private readonly executionResultLinker: ExecutionResultLinkerService,
     private readonly operationLogService: OperationLogService,
-    private readonly safetyService: SafetyService
+    private readonly safetyService: SafetyService,
+    private readonly requestContext: RequestContextService
   ) {}
 
-  async executePlan(actionPlanId: string, force = false) {
-    const plan = await (this.prisma as any).actionPlan.findUnique({ where: { id: actionPlanId }, include: { decision: true } });
+  async executePlan(actionPlanId: string, execution: ActionPlanExecutionContext = {}) {
+    const tenantId = execution.tenantId ?? this.requestContext.getTenantId();
+    if (!tenantId) throw new ForbiddenException('Authenticated tenant context required');
+    const plan = await (this.prisma as any).actionPlan.findFirst({ where: { id: actionPlanId, tenantId }, include: { decision: true } });
     if (!plan) throw new NotFoundException('Action plan not found');
-    const safetyResult = await this.safetyService.checkActionPlan(plan, { autoExecute: !force });
-    if (!force && !safetyResult.allowed) {
+    const override = execution.mode === ActionPlanExecutionMode.AUTHORIZED_POLICY_OVERRIDE;
+    if (override) this.assertAuthorizedOverride(execution.overrideReason);
+    const safetyResult = await this.safetyService.checkActionPlan(plan, { autoExecute: true });
+    if (safetyResult.hardBlocks.length > 0) {
       throw new BadRequestException(`Action plan blocked by safety policy: ${safetyResult.status}`);
     }
-    if (!force && (plan.status === 'BLOCKED' || plan.status === 'PENDING_APPROVAL')) {
-      throw new BadRequestException(`Action plan status is ${plan.status}; manual approval or force is required.`);
+    if (!safetyResult.allowed && !override) {
+      throw new BadRequestException(`Action plan blocked by safety policy: ${safetyResult.status}`);
+    }
+    if (plan.status === 'BLOCKED') {
+      throw new BadRequestException('Action plan status is BLOCKED and cannot be overridden');
+    }
+    if (plan.status === 'PENDING_APPROVAL' && !override) {
+      throw new BadRequestException('Action plan requires approval or an authorized policy override');
     }
     const actions = Array.isArray(plan.actions) ? plan.actions : [];
-    if (actions.length === 0 && !force) {
+    if (actions.length === 0) {
       throw new BadRequestException('Action plan has no executable actions');
     }
 
@@ -74,7 +95,18 @@ export class ActionExecutorService {
       targetType: 'ActionPlan',
       targetId: actionPlanId,
       description: 'Execute decision action plan',
-      metadata: { finalStatus, executionCount: executions.length } as any
+      metadata: {
+        finalStatus,
+        executionCount: executions.length,
+        override: override ? {
+          type: ActionPlanExecutionMode.AUTHORIZED_POLICY_OVERRIDE,
+          reason: execution.overrideReason,
+          userId: this.requestContext.getUserId(),
+          tenantId,
+          requestId: this.requestContext.getRequestId(),
+          timestamp: new Date().toISOString()
+        } : undefined
+      } as any
     });
 
     await this.executionResultLinker.linkActionPlanResult(actionPlanId);
@@ -83,7 +115,9 @@ export class ActionExecutorService {
   }
 
   async feedback(executionId: string, feedback: { status?: string; message?: string; payload?: Record<string, unknown> }) {
-    const execution = await (this.prisma as any).actionExecution.findUnique({ where: { id: executionId } });
+    const tenantId = this.requestContext.getTenantId();
+    if (!tenantId) throw new ForbiddenException('Authenticated tenant context required');
+    const execution = await (this.prisma as any).actionExecution.findFirst({ where: { id: executionId, actionPlan: { tenantId } } });
     if (!execution) throw new NotFoundException('Action execution not found');
     const status = feedback.status === 'FAILED' ? 'FAILED' : feedback.status === 'SKIPPED' ? 'SKIPPED' : 'ACKED';
     const updated = await (this.prisma as any).actionExecution.update({
@@ -100,6 +134,13 @@ export class ActionExecutorService {
     const plan = await (this.prisma as any).actionExecution.findUnique({ where: { id: executionId }, select: { actionPlanId: true } });
     if (plan?.actionPlanId) await this.executionResultLinker.linkActionPlanResult(plan.actionPlanId);
     return updated;
+  }
+
+  private assertAuthorizedOverride(reason?: string) {
+    if (!reason?.trim()) throw new BadRequestException('Override reason is required');
+    if (!hasPermissions(this.requestContext.getRole(), [PERMISSIONS.ACTION_POLICY_OVERRIDE])) {
+      throw new ForbiddenException('Elevated policy override permission required');
+    }
   }
 
   private async executeDeviceCommand(actionPlanId: string, deviceId: string, command: string, payload?: Record<string, unknown>, existingCommandId?: string) {

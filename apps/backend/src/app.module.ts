@@ -1,4 +1,4 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { CommonModule } from './common/common.module';
 import { AppConfigModule } from './config/app-config.module';
@@ -55,7 +55,6 @@ import { SafetyModule } from './modules/safety/safety.module';
 import { SensorRecordModule } from './modules/sensor-record/sensor-record.module';
 import { ServiceProviderModule } from './modules/service-provider/service-provider.module';
 import { TenantModule } from './modules/tenant/tenant.module';
-import { TenantContextMiddleware } from './modules/tenant/tenant-context.middleware';
 import { UserModule } from './modules/user/user.module';
 import { WorkLogModule } from './modules/work-log/work-log.module';
 import { WettingSimulationModule } from './modules/wetting-simulation/wetting-simulation.module';
@@ -125,8 +124,4 @@ import { YieldAnalysisModule } from './modules/yield-analysis/yield-analysis.mod
   ],
   controllers: [AppController]
 })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer.apply(TenantContextMiddleware).forRoutes('*');
-  }
-}
+export class AppModule {}

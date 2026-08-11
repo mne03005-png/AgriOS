@@ -1,9 +1,10 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RequestContextService } from '../request-context.service';
 
 @Injectable()
 export class TenantGuard implements CanActivate {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly requestContext: RequestContextService) {}
 
   async canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest();
@@ -25,6 +26,8 @@ export class TenantGuard implements CanActivate {
       }
       if (requestedTenantId && requestedTenantId !== userTenantId) {
         await this.audit(request, 'cross_tenant_access', { requestedTenantId, userTenantId });
+        this.requestContext.setAuthorizedTenant(requestedTenantId);
+        request.authorizedTenantId = requestedTenantId;
       }
       return true;
     }
