@@ -40,7 +40,7 @@ export class MobileController {
   }
 
   @Post('control/emergency-stop')
-  @Permissions(PERMISSIONS.IRRIGATION_EXECUTE)
+  @Permissions(PERMISSIONS.EMERGENCY_STOP)
   emergencyStop(@Req() req: AuthenticatedRequest, @Body() body: { farmId?: string; fieldId?: string }) {
     return this.mobileService.emergencyStop(body, req.user!);
   }

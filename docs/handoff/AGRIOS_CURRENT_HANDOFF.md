@@ -20,6 +20,7 @@
 - Lost ACK: 0
 - Production dependency audit: 0 vulnerabilities
 - P0 Safety Closure Batch 1: COMPLETE
+- P0 Safety Closure Batch 2: COMPLETE
 - Auth coverage for platform and physical-control entry points: HARDENED
 - Tenant, approval and action-plan isolation: HARDENED
 - Unsafe client `force` safety bypass: REMOVED
@@ -33,7 +34,6 @@
 
 ## Not yet completed
 
-- P0 Safety Closure Batch 2: Emergency/STOP dispatch and priority closure
 - P0 Safety Closure Batch 3: Physical confirmation closure
 - Real MQTT TLS commissioning against a provisioned non-production broker
 - LOGO physical-device commissioning

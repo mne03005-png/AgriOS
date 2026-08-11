@@ -2,6 +2,8 @@ export * from './edge-reliability-agent';
 export * from './edge-reliability.types';
 export * from './persistent-edge-store';
 export * from './modbus-tcp.transport';
+export * from './control-priority';
+export * from './control-command-arbiter';
 
 export const AGRIOS_MQTT_TOPICS = {
   telemetry: (deviceId: string) => `agrios/device/${deviceId}/telemetry`,

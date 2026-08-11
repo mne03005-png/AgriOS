@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestContextService } from '../../common/request-context.service';
 import { EventBusService } from '../event-bus/event-bus.service';
 import { CheckSafetyDto } from './dto/check-safety.dto';
 import { CreateSafetyPolicyDto } from './dto/create-safety-policy.dto';
 import { UpdateSafetyPolicyDto } from './dto/update-safety-policy.dto';
+import { DeviceControlService } from '../device-control/device-control.service';
+import { OperationLogService } from '../operation-log/operation-log.service';
 
 @Injectable()
 export class SafetyService {
@@ -14,7 +16,9 @@ export class SafetyService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly requestContext: RequestContextService,
-    private readonly eventBus: EventBusService
+    private readonly eventBus: EventBusService,
+    private readonly deviceControl: DeviceControlService,
+    private readonly operationLog: OperationLogService
   ) {}
 
   async check(dto: CheckSafetyDto) {
@@ -25,12 +29,12 @@ export class SafetyService {
     return this.buildSafetyResult(dto.fieldId, risks, { ...dto });
   }
 
-  async checkActionPlan(actionPlan: any, options: { autoExecute?: boolean } = {}) {
+  async checkActionPlan(actionPlan: any, options: { autoExecute?: boolean; allowDuringEmergencyStop?: boolean } = {}) {
     const safety = actionPlan.safety ?? {};
     const blocks = [...(Array.isArray(safety.blocks) ? safety.blocks : [])];
     const warnings = [...(Array.isArray(safety.warnings) ? safety.warnings : [])];
     const policy = await this.findActivePolicy(actionPlan.fieldId);
-    if (policy?.emergencyStopEnabled) blocks.push('EMERGENCY_STOP_ENABLED');
+    if (policy?.emergencyStopEnabled && !options.allowDuringEmergencyStop) blocks.push('EMERGENCY_STOP_ENABLED');
     if (options.autoExecute && !policy?.allowAutoExecution) warnings.push('AUTO_EXECUTION_REQUIRES_APPROVAL');
     if (safety.engineering?.wettingSimulationResult?.deepPercolationRisk === 'HIGH') blocks.push('HIGH_DEEP_PERCOLATION_RISK');
     if (warnings.includes('MISSING_MOISTURE_DATA_REQUIRES_MANUAL_APPROVAL')) {
@@ -69,16 +73,62 @@ export class SafetyService {
   }
 
   async emergencyStop(input: { farmId?: string; fieldId?: string; enabled?: boolean }) {
-    return (this.prisma as any).safetyPolicy.create({
-      data: {
-        tenantId: this.requestContext.getTenantId(),
-        farmId: input.farmId,
-        fieldId: input.fieldId,
-        name: 'Emergency Stop',
-        emergencyStopEnabled: input.enabled ?? true,
-        allowAutoExecution: false
-      }
+    const tenantId = this.requestContext.getTenantId();
+    if (!tenantId || !input.farmId) throw new ForbiddenException('Tenant and farm scope are required');
+    const scope = { tenantId, farmId: input.farmId, ...(input.fieldId ? { fieldId: input.fieldId } : {}) };
+    const farm = await (this.prisma as any).farm.findFirst({ where: { id: input.farmId, tenantId }, select: { id: true } });
+    if (!farm) throw new ForbiddenException('Farm is outside current tenant');
+    if (input.fieldId) {
+      const field = await (this.prisma as any).field.findFirst({ where: { id: input.fieldId, farmId: input.farmId, tenantId }, select: { id: true } });
+      if (!field) throw new ForbiddenException('Field is outside requested farm');
+    }
+    if (input.enabled === false) return this.resetEmergencyStop(scope);
+
+    const existing = await (this.prisma as any).safetyPolicy.findFirst({ where: { ...scope, isActive: true, emergencyStopEnabled: true }, orderBy: { createdAt: 'desc' } });
+    if (existing) return { ok: true, state: 'ALREADY_LATCHED', latchId: existing.id, dispatch: 'EXISTING_COMMAND', targetCount: 0 };
+
+    // Persist the latch before resolving or dispatching any device command.
+    const latch = await (this.prisma as any).safetyPolicy.create({ data: { ...scope, name: 'Emergency Stop', emergencyStopEnabled: true, allowAutoExecution: false } });
+    await (this.prisma as any).actionPlan.updateMany({
+      where: { tenantId, status: { in: ['DRAFT', 'READY', 'PENDING_APPROVAL', 'APPROVED'] }, ...(input.fieldId ? { fieldId: input.fieldId } : { decision: { farmId: input.farmId } }) },
+      data: { status: 'BLOCKED' }
     });
+    const targets = await (this.prisma as any).device.findMany({
+      where: { tenantId, type: { in: ['PUMP', 'VALVE'] }, field: { farmId: input.farmId, ...(input.fieldId ? { id: input.fieldId } : {}) } },
+      select: { id: true }
+    });
+    const auditMetadata = { requestId: this.requestContext.getRequestId(), tenantId, farmId: input.farmId, fieldId: input.fieldId, timestamp: new Date().toISOString(), requestedScope: scope, targetCount: targets.length, latchResult: 'LATCHED' };
+    await this.operationLog.create({ action: 'EMERGENCY_STOP_LATCH', targetType: input.fieldId ? 'FIELD' : 'FARM', targetId: input.fieldId ?? input.farmId, description: 'Software Emergency Stop latched; dispatch pending', metadata: { ...auditMetadata, dispatchResult: 'PENDING' } });
+    const results: Array<{ deviceId: string; ok: boolean; result?: unknown; error?: string }> = [];
+    for (const target of targets) {
+      try {
+        const result = await this.deviceControl.send(target.id, { command: 'EMERGENCY_STOP', controlPath: 'ACTION_QUEUE', commandId: `emergency-stop:${latch.id}:${target.id}` });
+        results.push({ deviceId: target.id, ok: this.dispatchSucceeded(result), result });
+      } catch (error) {
+        results.push({ deviceId: target.id, ok: false, error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    const dispatch = targets.length === 0 ? 'NO_CONTROLLABLE_TARGET' : results.every((item) => item.ok) ? 'DISPATCHED' : 'DISPATCH_FAILED';
+    await this.operationLog.create({ action: 'EMERGENCY_STOP_DISPATCH_RESULT', targetType: input.fieldId ? 'FIELD' : 'FARM', targetId: input.fieldId ?? input.farmId, description: 'Software Emergency Stop dispatch result', metadata: { ...auditMetadata, dispatchResult: dispatch } });
+    return { ok: dispatch === 'DISPATCHED', state: 'LATCHED', latchId: latch.id, dispatch, targetCount: targets.length, results };
+  }
+
+  private async resetEmergencyStop(scope: { tenantId: string; farmId: string; fieldId?: string }) {
+    const result = await (this.prisma as any).safetyPolicy.updateMany({ where: { ...scope, isActive: true, emergencyStopEnabled: true }, data: { isActive: false, emergencyStopEnabled: false } });
+    await this.operationLog.create({ action: 'EMERGENCY_STOP_RESET', targetType: scope.fieldId ? 'FIELD' : 'FARM', targetId: scope.fieldId ?? scope.farmId, description: 'Software Emergency Stop explicitly reset; stale commands remain invalid', metadata: { ...scope, requestId: this.requestContext.getRequestId(), timestamp: new Date().toISOString(), resetCount: result.count, autoResume: false } });
+    return { ok: true, state: 'RESET', resetCount: result.count, autoResume: false };
+  }
+
+  private dispatchSucceeded(result: unknown) {
+    return Boolean(result && typeof result === 'object' && (!('ok' in result) || (result as any).ok) && (result as any).executed !== false);
+  }
+
+  async assertDangerousStartAllowed(scope: { tenantId: string; farmId?: string; fieldId?: string }) {
+    const active = await (this.prisma as any).safetyPolicy.findFirst({
+      where: { tenantId: scope.tenantId, isActive: true, emergencyStopEnabled: true, OR: [{ farmId: scope.farmId }, { fieldId: scope.fieldId }] },
+      select: { id: true }
+    });
+    if (active) throw new ForbiddenException('EMERGENCY_STOP_ACTIVE');
   }
 
   listAlerts(query: Record<string, unknown> = {}) {

@@ -1,4 +1,5 @@
 import { QueueAdapter } from './queue-adapter.interface';
+import { ControlPriority, bullMqPriority } from '@agrios/edge-core';
 
 export class BullMqQueueAdapter implements QueueAdapter {
   readonly name = 'bullmq';
@@ -29,8 +30,8 @@ export class BullMqQueueAdapter implements QueueAdapter {
     }
   }
 
-  async enqueue(jobId: string, delayMs = 0) {
-    await this.queue.add('action-job', { jobId }, { delay: Math.max(0, delayMs), removeOnComplete: 1000, removeOnFail: 1000 });
+  async enqueue(jobId: string, delayMs = 0, priority = ControlPriority.NORMAL_CONTROL) {
+    await this.queue.add('action-job', { jobId }, { delay: Math.max(0, delayMs), priority: bullMqPriority(priority), removeOnComplete: 1000, removeOnFail: 1000 });
   }
 
   next() {

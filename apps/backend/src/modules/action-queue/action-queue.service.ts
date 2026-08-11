@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, NotFoundException, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestContextService } from '../../common/request-context.service';
@@ -8,11 +8,13 @@ import { ExecutionResultLinkerService } from '../execution/execution-result-link
 import { BullMqQueueAdapter } from './bullmq-queue.adapter';
 import { InMemoryQueueAdapter } from './in-memory-queue.adapter';
 import { QueueAdapter } from './queue-adapter.interface';
+import { ControlPriority, controlPriority, controlPriorityRank } from '@agrios/edge-core';
 
 @Injectable()
 export class ActionQueueService implements OnModuleDestroy {
   private readonly adapter: QueueAdapter;
   private processing = false;
+  private readonly priorities = new Map<string, ControlPriority>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -27,6 +29,7 @@ export class ActionQueueService implements OnModuleDestroy {
 
   async enqueue(input: { farmId: string; actionPlanId: string; scheduledAt?: string; maxRetries?: number }) {
     const maxRetries = input.maxRetries ?? Number(this.config.get<string>('ACTION_QUEUE_MAX_RETRIES') ?? 3);
+    const priority = await this.resolvePlanPriority(input.actionPlanId);
     const job = await (this.prisma as any).actionQueueJob.create({
       data: {
         tenantId: this.requestContext.getTenantId(),
@@ -37,7 +40,8 @@ export class ActionQueueService implements OnModuleDestroy {
         maxRetries
       }
     });
-    await this.adapter.enqueue(job.id, this.delayUntil(job.scheduledAt));
+    this.priorities.set(job.id, priority);
+    await this.adapter.enqueue(job.id, this.delayUntil(job.scheduledAt), priority);
     this.eventBus.publish('action.queue.queued', { farmId: input.farmId, actionPlanId: input.actionPlanId, jobId: job.id, driver: this.adapter.name }, this.requestContext.getTenantId());
     if (!this.adapter.handlesProcessing) void this.process();
     return job;
@@ -59,7 +63,9 @@ export class ActionQueueService implements OnModuleDestroy {
       where: { id },
       data: { status: 'QUEUED', lastError: null, finishedAt: null }
     });
-    await this.adapter.enqueue(job.id);
+    const priority = await this.resolvePlanPriority(job.actionPlanId);
+    this.priorities.set(job.id, priority);
+    await this.adapter.enqueue(job.id, 0, priority);
     this.eventBus.publish('action.queue.retry', { jobId: id, actionPlanId: job.actionPlanId, farmId: job.farmId }, job.tenantId);
     if (!this.adapter.handlesProcessing) void this.process();
     return job;
@@ -101,7 +107,7 @@ export class ActionQueueService implements OnModuleDestroy {
     const job = await (this.prisma as any).actionQueueJob.findUnique({ where: { id } });
     if (!job || ['FAILED', 'SUCCESS', 'DEAD_LETTERED'].includes(job.status)) return;
     if (job.scheduledAt && new Date(job.scheduledAt).getTime() > Date.now()) {
-      await this.adapter.enqueue(id, this.delayUntil(job.scheduledAt));
+      await this.adapter.enqueue(id, this.delayUntil(job.scheduledAt), this.priorities.get(id));
       return;
     }
 
@@ -135,7 +141,7 @@ export class ActionQueueService implements OnModuleDestroy {
         farmId: job.farmId,
         error: message
       });
-      if (nextStatus === 'RETRYING') await this.adapter.enqueue(id);
+      if (nextStatus === 'RETRYING') await this.adapter.enqueue(id, 0, this.priorities.get(id));
     }
   }
 
@@ -154,6 +160,16 @@ export class ActionQueueService implements OnModuleDestroy {
 
   private delayUntil(value?: Date | string | null) {
     return value ? Math.max(0, new Date(value).getTime() - Date.now()) : 0;
+  }
+
+  private async resolvePlanPriority(actionPlanId: string) {
+    const plan = await (this.prisma as any).actionPlan.findFirst({ where: { id: actionPlanId, tenantId: this.requestContext.getTenantId() }, select: { actions: true } });
+    if (!plan) throw new NotFoundException('Action plan not found in current tenant');
+    const actions = Array.isArray(plan?.actions) ? plan.actions : [];
+    return actions.reduce((selected: ControlPriority, action: any) => {
+      const next = action?.type === 'DEVICE_COMMAND' ? controlPriority(String(action.command ?? '')) : ControlPriority.NORMAL_CONTROL;
+      return controlPriorityRank(next) < controlPriorityRank(selected) ? next : selected;
+    }, ControlPriority.NORMAL_CONTROL);
   }
 
   async onModuleDestroy() {

@@ -15,7 +15,7 @@ export const getReadOnlyDeviceHistory = (deviceId: string, range = '24h') => {
 };
 export const getReadOnlyDeadLetters = () => request('/iot/dead-letters?pageSize=20', {}, { items: [], total: 0 });
 export const emergencyStop = (farmId = defaultFarmId) =>
-  request('/mobile/control/emergency-stop', { method: 'POST', body: JSON.stringify({ farmId }) }, { ok: false, code: 'READ_ONLY_MODE' });
+  request('/mobile/control/emergency-stop', { method: 'POST', body: JSON.stringify({ farmId }) }, { ok: false, state: 'NOT_CONFIRMED', dispatch: 'NOT_ATTEMPTED', targetCount: 0 });
 export const controlValve = (payload: { deviceId: string; command: 'VALVE_OPEN' | 'VALVE_CLOSE'; remark?: string }) =>
   request('/mobile/control/valve', { method: 'POST', body: JSON.stringify(payload) }, { ok: false, code: 'READ_ONLY_MODE', payload });
 export const getAlerts = (farmId = defaultFarmId) => request(`/mobile/alerts?farmId=${farmId}`, {}, mockAlerts);

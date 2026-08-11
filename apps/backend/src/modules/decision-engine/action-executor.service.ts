@@ -8,6 +8,7 @@ import { ExecutionResultLinkerService } from '../execution/execution-result-link
 import { OperationLogService } from '../operation-log/operation-log.service';
 import { SafetyService } from '../safety/safety.service';
 import { ActionPlanExecutionMode } from './dto/execute-action-plan.dto';
+import { isDangerousStart, isStopAction } from '@agrios/edge-core';
 
 interface ActionPlanExecutionContext {
   mode?: ActionPlanExecutionMode;
@@ -45,7 +46,9 @@ export class ActionExecutorService {
     if (!plan) throw new NotFoundException('Action plan not found');
     const override = execution.mode === ActionPlanExecutionMode.AUTHORIZED_POLICY_OVERRIDE;
     if (override) this.assertAuthorizedOverride(execution.overrideReason);
-    const safetyResult = await this.safetyService.checkActionPlan(plan, { autoExecute: true });
+    const actions = Array.isArray(plan.actions) ? plan.actions : [];
+    const stopOnly = actions.length > 0 && actions.every((action: any) => action.type !== 'DEVICE_COMMAND' || isStopAction(action.command));
+    const safetyResult = await this.safetyService.checkActionPlan(plan, { autoExecute: true, allowDuringEmergencyStop: stopOnly });
     if (safetyResult.hardBlocks.length > 0) {
       throw new BadRequestException(`Action plan blocked by safety policy: ${safetyResult.status}`);
     }
@@ -58,7 +61,6 @@ export class ActionExecutorService {
     if (plan.status === 'PENDING_APPROVAL' && !override) {
       throw new BadRequestException('Action plan requires approval or an authorized policy override');
     }
-    const actions = Array.isArray(plan.actions) ? plan.actions : [];
     if (actions.length === 0) {
       throw new BadRequestException('Action plan has no executable actions');
     }
@@ -67,6 +69,9 @@ export class ActionExecutorService {
     const executions = [];
     for (const action of actions) {
       if (action.type !== 'DEVICE_COMMAND' || !action.deviceId || !action.command) continue;
+      if (isDangerousStart(action.command)) {
+        await this.safetyService.assertDangerousStartAllowed({ tenantId: plan.tenantId, farmId: action.farmId ?? plan.decision?.farmId, fieldId: action.fieldId ?? plan.fieldId });
+      }
       const execution = await this.executeDeviceCommand(actionPlanId, action.deviceId, action.command, {
         ...(action.payload ?? {}),
         tenantId: plan.tenantId,

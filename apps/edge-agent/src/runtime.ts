@@ -1,5 +1,5 @@
 import { appendFile, readFile } from 'node:fs/promises';
-import { EdgeReliabilityAgent, PersistentEdgeStore, PlcTransportPort } from '@agrios/edge-core';
+import { ControlCommandArbiter, EdgeReliabilityAgent, PersistentEdgeStore, PlcTransportPort } from '@agrios/edge-core';
 import { CommandAuthenticator } from './authenticator';
 import { EdgeConfig, realWriteEligible } from './config';
 import { EdgeDeviceControl, FakePlcTransport } from './device-control';
@@ -10,6 +10,7 @@ export class EdgeRuntime {
   private accepting = true; private startedAt = Date.now(); private healthTimer?: NodeJS.Timeout;
   private readonly store: PersistentEdgeStore; private readonly agent: EdgeReliabilityAgent;
   private authenticator?: CommandAuthenticator; private readonly control: EdgeDeviceControl;
+  private readonly commandArbiter = new ControlCommandArbiter();
   constructor(private readonly config: EdgeConfig, private readonly mqtt: RuntimeMqttTransport, private readonly paths: { executionJournal?: string; outcomeJournal?: string }, private readonly plc: PlcTransportPort = new FakePlcTransport(), private readonly plcWriteEligible = false) {
     this.store = new PersistentEdgeStore(config.storage.path, config.storage);
     this.agent = new EdgeReliabilityAgent(this.store, mqtt, { edgeId: config.edgeId, tenantId: config.tenantId, farmId: config.farmId, deviceIds: config.allowedDeviceIds }, { batchSize: 50, retryDelayMs: config.reconnect.initialDelayMs, maxBackoffMs: config.reconnect.maxDelayMs });
@@ -17,6 +18,9 @@ export class EdgeRuntime {
   }
   async start(inputPath?: string, runOnce = false) {
     await this.store.open(); this.authenticator = await CommandAuthenticator.fromKeyFile(this.config.mqtt.hmacKeyPath);
+    const recorded = this.store.snapshot().commands;
+    const lastSafety = [...recorded].reverse().find((item) => item.action === 'EMERGENCY_STOP' || item.action === 'RESET_EMERGENCY_STOP');
+    this.commandArbiter.restoreEmergencyLatch(lastSafety?.action === 'EMERGENCY_STOP');
     this.mqtt.onCommand(async (payload) => this.handleCommand(JSON.parse(payload)));
     await this.connectSafely();
     if (inputPath) await this.processInput(inputPath);
@@ -30,7 +34,7 @@ export class EdgeRuntime {
     if (!this.accepting) return;
     const signatureValid = this.authenticator?.verify(data) === true;
     try {
-      const result = await this.agent.receiveCommand({ commandId: String(data.commandId ?? ''), edgeId: String(data.edgeId ?? ''), deviceId: String(data.deviceId ?? ''), tenantId: String(data.tenantId ?? ''), farmId: String(data.farmId ?? ''), action: String(data.action ?? ''), expiresAt: String(data.expiresAt ?? ''), signatureValid }, () => this.control.execute({ commandId: data.commandId, action: data.action }));
+      const result = await this.commandArbiter.submit(String(data.action ?? ''), (dispatchAllowed) => this.agent.receiveCommand({ commandId: String(data.commandId ?? ''), edgeId: String(data.edgeId ?? ''), deviceId: String(data.deviceId ?? ''), tenantId: String(data.tenantId ?? ''), farmId: String(data.farmId ?? ''), action: String(data.action ?? ''), expiresAt: String(data.expiresAt ?? ''), signatureValid }, () => dispatchAllowed ? this.control.execute({ commandId: data.commandId, action: data.action }) : Promise.resolve({ status: data.action === 'EMERGENCY_STOP' ? 'ALREADY_LATCHED' : 'SAFETY_BLOCKED', executed: false, errorCode: 'EMERGENCY_STOP_ACTIVE_OR_STALE_START' })));
       await this.outcome({ commandId: data.commandId, outcome: result.duplicate ? 'DUPLICATE' : result.record.ackStatus === 'EXPIRED' ? 'EXPIRED' : 'ACCEPTED' });
     } catch (error) { await this.outcome({ commandId: data.commandId, outcome: 'REJECTED', reason: error instanceof Error ? error.message : String(error) }); }
   }

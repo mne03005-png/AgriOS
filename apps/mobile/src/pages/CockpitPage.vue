@@ -62,8 +62,13 @@ onMounted(async () => {
 });
 
 async function onEmergencyStop() {
-  await emergencyStop(defaultFarmId);
-  window.alert('停水请求已提交，最终控制由后端安全策略执行。');
+  const response = await emergencyStop(defaultFarmId);
+  const result = response.data as any;
+  if (response.status === 'ERROR' || response.status === 'OFFLINE') window.alert(`Emergency Stop not accepted: ${response.errorMessage ?? response.errorCode}`);
+  else if (result?.state === 'LATCHED' && result?.dispatch === 'DISPATCHED') window.alert(`Emergency Stop latched; command dispatched to ${result.targetCount} target(s). Physical stop is not yet confirmed.`);
+  else if (result?.state === 'ALREADY_LATCHED') window.alert('System is already in Emergency Stop state.');
+  else if (result?.state === 'LATCHED') window.alert(`Emergency Stop latched, but dispatch status is ${result.dispatch}. Equipment must be checked.`);
+  else window.alert('Emergency Stop result could not be confirmed.');
 }
 
 async function onValve() {
