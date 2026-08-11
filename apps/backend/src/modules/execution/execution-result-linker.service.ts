@@ -44,6 +44,9 @@ export class ExecutionResultLinkerService {
     if (businessRef.type === 'DissolveFertilizerTask') {
       return this.linkDissolveTask(businessRef.record, plan, payload);
     }
+    if (businessRef.type === 'ExecutionServiceActionPlan') {
+      return this.linkExecutionServicePlan(plan, payload);
+    }
     return null;
   }
 
@@ -78,7 +81,40 @@ export class ExecutionResultLinkerService {
       const dissolveTask = await (this.prisma as any).dissolveFertilizerTask.findUnique({ where: { id: dissolveTaskId } });
       if (dissolveTask) return { type: 'DissolveFertilizerTask', record: dissolveTask };
     }
+    const decisionSource = plan.decision?.metadata?.source;
+    const executionSource = actions.find((item: any) => item?.payload?.source === 'EXECUTION_SERVICE');
+    if (decisionSource === 'EXECUTION_SERVICE' && executionSource) {
+      return { type: 'ExecutionServiceActionPlan', record: plan };
+    }
     return null;
+  }
+
+  private async linkExecutionServicePlan(plan: any, payload: any) {
+    if (payload.status !== 'SUCCESS') return payload;
+    const actions = (Array.isArray(plan.actions) ? plan.actions : []).filter((item: any) => item?.type === 'DEVICE_COMMAND');
+    const action = actions[0];
+    if (!action || !plan.tenantId) return payload;
+    const usage = await this.recordUsageOnce(
+      plan.tenantId,
+      action.farmId ?? plan.decision?.farmId,
+      action.fieldId ?? plan.fieldId,
+      'DEVICE_EXECUTION',
+      plan.id,
+      'ActionPlan',
+      action.deviceId
+    );
+    if (usage.created) {
+      this.eventBus.publish('action.executed', {
+        farmId: action.farmId ?? plan.decision?.farmId,
+        fieldId: action.fieldId ?? plan.fieldId,
+        deviceId: action.deviceId,
+        command: action.command,
+        mode: action.payload?.mode,
+        actionPlanId: plan.id,
+        physicalConfirmed: true
+      }, plan.tenantId);
+    }
+    return payload;
   }
 
   private async linkRotationRun(run: any, plan: any, payload: any) {
@@ -179,15 +215,16 @@ export class ExecutionResultLinkerService {
     return (this.prisma as any).farmActivity.create({ data: input });
   }
 
-  private async recordUsageOnce(tenantId: string | null | undefined, farmId: string, fieldId: string | null | undefined, usageType: string, refId: string, refType: string) {
-    if (!tenantId) return null;
+  private async recordUsageOnce(tenantId: string | null | undefined, farmId: string, fieldId: string | null | undefined, usageType: string, refId: string, refType: string, deviceId?: string) {
+    if (!tenantId) return { record: null, created: false };
     const existing = await (this.prisma as any).usageRecord.findFirst({
       where: { tenantId, usageType, metadata: { path: ['refId'], equals: refId } as any }
     }).catch(() => null);
-    if (existing) return existing;
-    return (this.prisma as any).usageRecord.create({
-      data: { tenantId, farmId, fieldId, usageType, quantity: 1, unit: 'execution', costAmount: 0, metadata: { refType, refId } }
+    if (existing) return { record: existing, created: false };
+    const record = await (this.prisma as any).usageRecord.create({
+      data: { tenantId, farmId, fieldId, deviceId, usageType, quantity: 1, unit: 'execution', costAmount: 0, metadata: { refType, refId } }
     });
+    return { record, created: true };
   }
 
   private sumDurationMinutes(actions: any[]) {

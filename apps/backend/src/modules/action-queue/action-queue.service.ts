@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, OnModuleDestroy } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestContextService } from '../../common/request-context.service';
@@ -27,12 +27,16 @@ export class ActionQueueService implements OnModuleDestroy {
     this.adapter = this.createAdapter();
   }
 
-  async enqueue(input: { farmId: string; actionPlanId: string; scheduledAt?: string; maxRetries?: number }) {
+  async enqueue(
+    input: { farmId: string; actionPlanId: string; scheduledAt?: string; maxRetries?: number },
+    authorizedTarget?: { tenantId: string }
+  ) {
+    const tenantId = await this.resolveEnqueueTenant(input.actionPlanId, input.farmId, authorizedTarget?.tenantId);
     const maxRetries = input.maxRetries ?? Number(this.config.get<string>('ACTION_QUEUE_MAX_RETRIES') ?? 3);
-    const priority = await this.resolvePlanPriority(input.actionPlanId);
+    const priority = await this.resolvePlanPriority(input.actionPlanId, tenantId);
     const job = await (this.prisma as any).actionQueueJob.create({
       data: {
-        tenantId: this.requestContext.getTenantId(),
+        tenantId,
         farmId: input.farmId,
         actionPlanId: input.actionPlanId,
         status: 'QUEUED',
@@ -42,7 +46,7 @@ export class ActionQueueService implements OnModuleDestroy {
     });
     this.priorities.set(job.id, priority);
     await this.adapter.enqueue(job.id, this.delayUntil(job.scheduledAt), priority);
-    this.eventBus.publish('action.queue.queued', { farmId: input.farmId, actionPlanId: input.actionPlanId, jobId: job.id, driver: this.adapter.name }, this.requestContext.getTenantId());
+    this.eventBus.publish('action.queue.queued', { farmId: input.farmId, actionPlanId: input.actionPlanId, jobId: job.id, driver: this.adapter.name }, tenantId);
     if (!this.adapter.handlesProcessing) void this.process();
     return job;
   }
@@ -63,7 +67,7 @@ export class ActionQueueService implements OnModuleDestroy {
       where: { id },
       data: { status: 'QUEUED', lastError: null, finishedAt: null }
     });
-    const priority = await this.resolvePlanPriority(job.actionPlanId);
+    const priority = await this.resolvePlanPriority(job.actionPlanId, job.tenantId);
     this.priorities.set(job.id, priority);
     await this.adapter.enqueue(job.id, 0, priority);
     this.eventBus.publish('action.queue.retry', { jobId: id, actionPlanId: job.actionPlanId, farmId: job.farmId }, job.tenantId);
@@ -163,14 +167,31 @@ export class ActionQueueService implements OnModuleDestroy {
     return value ? Math.max(0, new Date(value).getTime() - Date.now()) : 0;
   }
 
-  private async resolvePlanPriority(actionPlanId: string) {
-    const plan = await (this.prisma as any).actionPlan.findFirst({ where: { id: actionPlanId, tenantId: this.requestContext.getTenantId() }, select: { actions: true } });
+  private async resolvePlanPriority(actionPlanId: string, tenantId?: string | null) {
+    if (!tenantId) throw new ForbiddenException('Resolved tenant is required for action queue');
+    const plan = await (this.prisma as any).actionPlan.findFirst({ where: { id: actionPlanId, tenantId }, select: { actions: true } });
     if (!plan) throw new NotFoundException('Action plan not found in current tenant');
     const actions = Array.isArray(plan?.actions) ? plan.actions : [];
     return actions.reduce((selected: ControlPriority, action: any) => {
       const next = action?.type === 'DEVICE_COMMAND' ? controlPriority(String(action.command ?? '')) : ControlPriority.NORMAL_CONTROL;
       return controlPriorityRank(next) < controlPriorityRank(selected) ? next : selected;
     }, ControlPriority.NORMAL_CONTROL);
+  }
+
+  private async resolveEnqueueTenant(actionPlanId: string, farmId: string, authorizedTargetTenant?: string) {
+    const contextTenant = this.requestContext.getTenantId();
+    if (authorizedTargetTenant && contextTenant && authorizedTargetTenant !== contextTenant && !this.requestContext.isPlatformAdmin()) {
+      throw new ForbiddenException('Normal tenant cannot override action queue tenant');
+    }
+    const tenantId = authorizedTargetTenant ?? contextTenant;
+    if (!tenantId) throw new ForbiddenException('Resolved tenant is required for action queue');
+    const [plan, farm] = await Promise.all([
+      (this.prisma as any).actionPlan.findFirst({ where: { id: actionPlanId, tenantId }, select: { id: true } }),
+      (this.prisma as any).farm.findFirst({ where: { id: farmId, tenantId }, select: { id: true } })
+    ]);
+    if (!plan) throw new NotFoundException('Action plan not found in resolved tenant');
+    if (!farm) throw new NotFoundException('Farm not found in resolved tenant');
+    return tenantId;
   }
 
   async onModuleDestroy() {

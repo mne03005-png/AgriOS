@@ -279,7 +279,10 @@ export class MobileService {
       actions: [{ type: 'DEVICE_COMMAND', deviceId: device.id, command: body.command, farmId: device.field.farmId, fieldId: device.fieldId, payload: { source: 'MOBILE', remark: body.remark } }],
       safety: { source: 'MOBILE', requiresQueue: true }
     } });
-    const queueJob = await this.actionQueue().enqueue({ farmId: device.field.farmId, actionPlanId: actionPlan.id });
+    const queueJob = await this.actionQueue().enqueue(
+      { farmId: device.field.farmId, actionPlanId: actionPlan.id },
+      { tenantId }
+    );
     return { accepted: true, queued: true, executed: false, physicalConfirmed: false, status: 'QUEUED', actionPlanId: actionPlan.id, queueJobId: queueJob.id };
   }
 
