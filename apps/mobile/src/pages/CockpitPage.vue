@@ -49,6 +49,7 @@ import AIRecommendationCard from '../components/cockpit/AIRecommendationCard.vue
 import PressureFlowSummaryCard from '../components/cockpit/PressureFlowSummaryCard.vue';
 import PumpStatusCard from '../components/cockpit/PumpStatusCard.vue';
 import QuickActions from '../components/cockpit/QuickActions.vue';
+import { apiErrorMessage } from '../api/api-error';
 
 const data = ref<any>(mockCockpit);
 const isMock = ref(true);
@@ -64,7 +65,7 @@ onMounted(async () => {
 async function onEmergencyStop() {
   const response = await emergencyStop(defaultFarmId);
   const result = response.data as any;
-  if (response.status === 'ERROR' || response.status === 'OFFLINE') window.alert(`Emergency Stop not accepted: ${response.errorMessage ?? response.errorCode}`);
+  if (response.status === 'ERROR' || response.status === 'OFFLINE') window.alert(apiErrorMessage({ errorCode: response.errorCode ?? 'INTERNAL_ERROR', message: response.errorMessage ?? '操作失败，请稍后重试。', requestId: response.requestId }));
   else if (result?.state === 'LATCHED' && result?.dispatch === 'DISPATCHED') window.alert(`Emergency Stop latched; command dispatched to ${result.targetCount} target(s). Physical stop is not yet confirmed.`);
   else if (result?.state === 'ALREADY_LATCHED') window.alert('System is already in Emergency Stop state.');
   else if (result?.state === 'LATCHED') window.alert(`Emergency Stop latched, but dispatch status is ${result.dispatch}. Equipment must be checked.`);
@@ -72,7 +73,8 @@ async function onEmergencyStop() {
 }
 
 async function onValve() {
-  await controlValve({ deviceId: 'valve_001', command: 'VALVE_OPEN', remark: 'mobile cockpit manual valve' });
-  window.alert('开阀请求已提交。');
+  const response = await controlValve({ deviceId: 'valve_001', command: 'VALVE_OPEN', remark: 'mobile cockpit manual valve' });
+  if (response.status === 'ERROR' || response.status === 'OFFLINE') window.alert(apiErrorMessage({ errorCode: response.errorCode ?? 'INTERNAL_ERROR', message: response.errorMessage ?? '操作失败，请稍后重试。', requestId: response.requestId }));
+  else window.alert('开阀请求已提交。');
 }
 </script>

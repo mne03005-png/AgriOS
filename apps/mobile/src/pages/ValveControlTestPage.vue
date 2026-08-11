@@ -75,6 +75,7 @@ import { computed, onMounted, ref } from 'vue';
 import DemoHeader from '../components/common/DemoHeader.vue';
 import { authStore } from '../stores/auth.store';
 import { requestDangerousConfirmation } from '../services/dangerous-operation';
+import { apiErrorMessage } from '../api/api-error';
 import {
   getHealthReady,
   getValveCommands,
@@ -116,7 +117,7 @@ async function runTestOpen() {
   const confirmation = requestDangerousConfirmation('VALVE_OPEN', demoValveId, authStore.user?.farmId ?? '未选择', '未指定');
   if (!confirmation.ok) { lastResult.value = { status: 'BLOCKED', error: confirmation.error }; return; }
   const result = await postValveTestOpen(demoValveId, 3, confirmation.reason, confirmation.reauthToken);
-  lastResult.value = result.data;
+  lastResult.value = result.status === 'ERROR' || result.status === 'OFFLINE' ? { status: 'BLOCKED', error: apiErrorMessage({ errorCode: result.errorCode ?? 'INTERNAL_ERROR', message: result.errorMessage ?? '操作失败，请稍后重试。', requestId: result.requestId }), errorCode: result.errorCode, requestId: result.requestId } : result.data;
   await refresh();
 }
 
@@ -124,7 +125,7 @@ async function runClose() {
   const confirmation = requestDangerousConfirmation('VALVE_CLOSE', demoValveId, authStore.user?.farmId ?? '未选择', '未指定');
   if (!confirmation.ok) { lastResult.value = { status: 'BLOCKED', error: confirmation.error }; return; }
   const result = await postValveClose(demoValveId, confirmation.reason, confirmation.reauthToken);
-  lastResult.value = result.data;
+  lastResult.value = result.status === 'ERROR' || result.status === 'OFFLINE' ? { status: 'BLOCKED', error: apiErrorMessage({ errorCode: result.errorCode ?? 'INTERNAL_ERROR', message: result.errorMessage ?? '操作失败，请稍后重试。', requestId: result.requestId }), errorCode: result.errorCode, requestId: result.requestId } : result.data;
   await refresh();
 }
 
@@ -132,7 +133,7 @@ async function runSetOpening() {
   const confirmation = requestDangerousConfirmation('VALVE_OPEN', demoValveId, authStore.user?.farmId ?? '未选择', '未指定');
   if (!confirmation.ok) { lastResult.value = { status: 'BLOCKED', error: confirmation.error }; return; }
   const result = await postValveSetOpening(demoValveId, 5, confirmation.reason, confirmation.reauthToken);
-  lastResult.value = result.data;
+  lastResult.value = result.status === 'ERROR' || result.status === 'OFFLINE' ? { status: 'BLOCKED', error: apiErrorMessage({ errorCode: result.errorCode ?? 'INTERNAL_ERROR', message: result.errorMessage ?? '操作失败，请稍后重试。', requestId: result.requestId }), errorCode: result.errorCode, requestId: result.requestId } : result.data;
   await refresh();
 }
 </script>

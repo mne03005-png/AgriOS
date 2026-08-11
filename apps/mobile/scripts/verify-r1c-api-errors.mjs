@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import ts from 'typescript';
+
+const source = await readFile(new URL('../src/api/api-error.ts', import.meta.url), 'utf8');
+const javascript = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const api = await import(`data:text/javascript;base64,${Buffer.from(javascript).toString('base64')}`);
+const tests = []; const test = (name, run) => tests.push({ name, run });
+const structured = JSON.stringify({ success: false, errorCode: 'EMERGENCY_STOP_ACTIVE', message: 'blocked', reasons: ['EMERGENCY_STOP_ACTIVE'], requestId: 'request-123', statusCode: 403, actionPlanId: 'plan-a', commandId: 'command-a' });
+test('20 structured JSON parses errorCode', () => assert.equal(api.parseApiErrorText(403, structured).errorCode, 'EMERGENCY_STOP_ACTIVE'));
+test('21 reasons are preserved', () => assert.deepEqual(api.parseApiErrorText(403, structured).reasons, ['EMERGENCY_STOP_ACTIVE']));
+test('22 requestId is preserved', () => assert.equal(api.parseApiErrorText(403, structured).requestId, 'request-123'));
+test('23 EMERGENCY_STOP_ACTIVE maps to Chinese user message', () => assert.equal(api.parseApiErrorText(403, structured).message, '急停已激活，当前禁止执行该操作。'));
+test('24 unknown code safely uses backend message', () => assert.equal(api.parseApiErrorText(400, JSON.stringify({ errorCode: 'UNKNOWN_OPERATION', message: 'Safe backend message' })).message, 'Safe backend message'));
+test('25 plain-text 500 safely falls back without echoing server text', () => { const value = api.parseApiErrorText(500, 'server unavailable'); assert.equal(value.errorCode, 'INVALID_SERVER_RESPONSE'); assert.equal(value.message, '服务器返回了无法识别的响应。'); });
+test('26 malformed JSON safely falls back', () => assert.doesNotThrow(() => api.parseApiErrorText(500, '{bad json')));
+test('27 network failure gives NETWORK_ERROR', () => assert.equal(api.parseApiError({ error: new TypeError('fetch failed') }).errorCode, 'NETWORK_ERROR'));
+test('28 401 remains distinguishable', () => { const value = api.parseApiErrorText(401, JSON.stringify({ statusCode: 401, message: 'Unauthorized' })); assert.equal(value.errorCode, 'HTTP_401'); assert.equal(value.statusCode, 401); });
+test('29 no malformed parser input escapes', () => assert.doesNotThrow(() => api.parseApiError({ body: new Proxy({}, { get() { throw new Error('bad'); } }) })));
+test('30 optional diagnostic IDs are preserved', () => { const value = api.parseApiErrorText(403, structured); assert.equal(value.actionPlanId, 'plan-a'); assert.equal(value.commandId, 'command-a'); });
+let passed = 0; for (const item of tests) { try { await item.run(); passed++; console.log(`PASS ${item.name}`); } catch (error) { console.error(`FAIL ${item.name}`, error); process.exitCode = 1; } } console.log(`R1-C MOBILE API ERRORS: ${passed}/${tests.length} PASS`); if (passed !== tests.length) process.exitCode = 1;

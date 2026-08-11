@@ -1,6 +1,7 @@
 import { authStore } from '../stores/auth.store';
 import type { DataEnvelope } from '../services/data-state';
 import { mockAllowed } from '../services/data-state';
+import { parseApiError, parseApiErrorText } from './api-error';
 
 export type ApiResult<T> = DataEnvelope<T>;
 
@@ -39,15 +40,9 @@ export async function request<T>(path: string, options: RequestInit = {}, fallba
       }
     });
     if (!response.ok) {
-      let detail = '';
-      try {
-        const body = await response.json();
-        detail = body?.message ? ` ${body.message}` : '';
-      } catch {
-        detail = '';
-      }
-      const error = new Error(`${path} -> HTTP ${response.status}${detail}`);
-      (error as any).status = response.status;
+      const apiError = parseApiErrorText(response.status, await response.text());
+      const error = new Error(apiError.message);
+      Object.assign(error, { status: response.status, apiError });
       throw error;
     }
     const body = await response.json();
@@ -62,11 +57,12 @@ export async function request<T>(path: string, options: RequestInit = {}, fallba
         window.location.assign(`${loginPath}?redirect=${encodeURIComponent(redirect)}`);
       }
     }
-    const message = error instanceof Error ? error.message : String(error);
+    const apiError = (error as any)?.apiError ?? parseApiError({ status: (error as any)?.status, error });
+    const message = apiError.message;
     if (mockAllowed() && fallback !== undefined) {
-      return { data: fallback, source: 'MOCK', status: 'MOCK', lastUpdatedAt: null, freshness: 'UNKNOWN', errorCode: 'MOCK_FALLBACK', errorMessage: message, retryable: true, isMock: true, path, httpStatus: (error as any)?.status, error: message };
+      return { data: fallback, source: 'MOCK', status: 'MOCK', lastUpdatedAt: null, freshness: 'UNKNOWN', errorCode: apiError.errorCode, errorMessage: message, retryable: true, isMock: true, path, httpStatus: apiError.statusCode, error: message, ...apiError };
     }
     const offline = typeof navigator !== 'undefined' && !navigator.onLine;
-    return { data: null as T, source: 'NONE', status: offline ? 'OFFLINE' : 'ERROR', lastUpdatedAt: null, freshness: 'UNKNOWN', errorCode: offline ? 'OFFLINE' : `HTTP_${(error as any)?.status ?? 'NETWORK'}`, errorMessage: message, retryable: true, isMock: false, path, httpStatus: (error as any)?.status, error: message };
+    return { data: null as T, source: 'NONE', status: offline ? 'OFFLINE' : 'ERROR', lastUpdatedAt: null, freshness: 'UNKNOWN', errorCode: offline ? 'NETWORK_ERROR' : apiError.errorCode, errorMessage: message, retryable: true, isMock: false, path, httpStatus: apiError.statusCode, error: message, ...apiError };
   }
 }

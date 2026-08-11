@@ -77,6 +77,7 @@ import { defaultFieldId, mockFieldDetail } from '../api/mock-data';
 import DecisionExplanationCard from '../components/ai/DecisionExplanationCard.vue';
 import DemoHeader from '../components/common/DemoHeader.vue';
 import ValveControlPanel from '../components/control/ValveControlPanel.vue';
+import { apiErrorMessage } from '../api/api-error';
 
 const route = useRoute();
 const detail = ref<any>(mockFieldDetail);
@@ -96,8 +97,9 @@ onMounted(async () => {
 });
 
 async function onValve(command: 'VALVE_OPEN' | 'VALVE_CLOSE') {
-  await controlValve({ deviceId: 'valve_001', command, remark: 'field detail manual valve' });
-  window.alert('阀门请求已提交。');
+  const response = await controlValve({ deviceId: 'valve_001', command, remark: 'field detail manual valve' });
+  if (response.status === 'ERROR' || response.status === 'OFFLINE') window.alert(apiErrorMessage({ errorCode: response.errorCode ?? 'INTERNAL_ERROR', message: response.errorMessage ?? '操作失败，请稍后重试。', requestId: response.requestId }));
+  else window.alert('阀门请求已提交。');
 }
 
 function percent(value?: number) {

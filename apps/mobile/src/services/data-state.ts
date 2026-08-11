@@ -14,6 +14,12 @@ export type DataEnvelope<T> = {
   path?: string;
   httpStatus?: number;
   error?: string;
+  reasons?: string[];
+  requestId?: string;
+  actionPlanId?: string;
+  commandId?: string;
+  queueJobId?: string;
+  deviceId?: string;
 };
 
 export function mockAllowed() {

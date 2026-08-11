@@ -9,6 +9,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "verify:prod-mobile": "node scripts/verify-prod-mobile.mjs"
     ,"test:phase-a": "node scripts/verify-phase-a-frontend.mjs"
+    ,"test:r1c-errors": "node scripts/verify-r1c-api-errors.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-vue": "^6.0.0",
