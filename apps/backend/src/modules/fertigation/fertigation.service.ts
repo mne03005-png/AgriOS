@@ -153,7 +153,7 @@ export class FertigationService {
       where: { id },
       data: { status: 'QUEUED', startedAt: new Date(), actionPlanId: actionPlan.id, resultJson: { queueJobId: queueJob.id } }
     });
-    await this.recordUsage(task, id);
+    // Final usage is recorded idempotently by ExecutionResultLinker after physical confirmation.
     this.eventBus.publish('fertigation.task.started', { farmId: task.farmId, fieldId: task.fieldId, taskId: id, actionPlanId: actionPlan.id }, task.tenantId);
     await this.farmActivityService.create({
       tenantId: task.tenantId,

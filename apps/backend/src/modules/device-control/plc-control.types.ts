@@ -4,6 +4,8 @@ export type PlcControlAction =
 
 export type PlcCommandStatus =
   | 'CREATED' | 'QUEUED' | 'DISPATCHING' | 'SENT' | 'ACK_PENDING'
+  | 'FEEDBACK_PENDING' | 'PHYSICALLY_CONFIRMED' | 'FEEDBACK_MISMATCH'
+  | 'FEEDBACK_TIMEOUT' | 'FEEDBACK_UNAVAILABLE' | 'OUTCOME_UNKNOWN'
   | 'ACKNOWLEDGED' | 'SUCCEEDED' | 'REJECTED' | 'TIMEOUT' | 'FAILED'
   | 'CANCELLED' | 'EXPIRED' | 'SAFETY_BLOCKED';
 
@@ -25,6 +27,8 @@ export interface PlcCommandResult {
   commandId: string;
   accepted: boolean;
   executed: boolean;
+  physicalConfirmed?: boolean;
+  transportAccepted?: boolean;
   acknowledged: boolean;
   status: PlcCommandStatus;
   errorCode?: string;
@@ -52,6 +56,12 @@ export interface PlcStatus {
   overloadTrip: boolean;
   pumpRunning: boolean;
   valveOpen: boolean;
+  valveClosed?: boolean;
+  observedAt: string;
+  source: 'MEMORY' | 'MODBUS_TCP' | 'FAKE_FEEDBACK';
+  fresh: boolean;
+  stale?: boolean;
+  errorCode?: string;
 }
 
 export interface PlcControllerPort {

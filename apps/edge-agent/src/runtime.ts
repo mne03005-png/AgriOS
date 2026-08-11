@@ -11,13 +11,14 @@ export class EdgeRuntime {
   private readonly store: PersistentEdgeStore; private readonly agent: EdgeReliabilityAgent;
   private authenticator?: CommandAuthenticator; private readonly control: EdgeDeviceControl;
   private readonly commandArbiter = new ControlCommandArbiter();
-  constructor(private readonly config: EdgeConfig, private readonly mqtt: RuntimeMqttTransport, private readonly paths: { executionJournal?: string; outcomeJournal?: string }, private readonly plc: PlcTransportPort = new FakePlcTransport(), private readonly plcWriteEligible = false) {
+  constructor(private readonly config: EdgeConfig, private readonly mqtt: RuntimeMqttTransport, private readonly paths: { executionJournal?: string; outcomeJournal?: string }, private readonly plc: PlcTransportPort = new FakePlcTransport(), private readonly plcWriteEligible = false, plcProfile?: any) {
     this.store = new PersistentEdgeStore(config.storage.path, config.storage);
     this.agent = new EdgeReliabilityAgent(this.store, mqtt, { edgeId: config.edgeId, tenantId: config.tenantId, farmId: config.farmId, deviceIds: config.allowedDeviceIds }, { batchSize: 50, retryDelayMs: config.reconnect.initialDelayMs, maxBackoffMs: config.reconnect.maxDelayMs });
-    this.control = new EdgeDeviceControl(config, this.plc, plcWriteEligible, async (commandId, action) => { if (paths.executionJournal) await appendFile(paths.executionJournal, `${JSON.stringify({ commandId, action, at: new Date().toISOString() })}\n`); });
+    this.control = new EdgeDeviceControl(config, this.plc, plcWriteEligible, async (commandId, action) => { if (paths.executionJournal) await appendFile(paths.executionJournal, `${JSON.stringify({ commandId, action, at: new Date().toISOString() })}\n`); }, plcProfile);
   }
   async start(inputPath?: string, runOnce = false) {
     await this.store.open(); this.authenticator = await CommandAuthenticator.fromKeyFile(this.config.mqtt.hmacKeyPath);
+    await this.plc.connect();
     const activeEmergencyCommandId = activeEmergencyIdentity(this.store.snapshot().commands);
     this.commandArbiter.restoreEmergencyLatch(activeEmergencyCommandId);
     this.mqtt.onCommand(async (payload) => this.handleCommand(JSON.parse(payload)));

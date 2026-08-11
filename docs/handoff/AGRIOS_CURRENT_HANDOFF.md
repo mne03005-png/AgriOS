@@ -22,6 +22,8 @@
 - P0 Safety Closure Batch 1: COMPLETE
 - P0 Safety Closure Batch 2: COMPLETE
 - P0 Safety Closure Batch 2.1 final safety dispatch correction: COMPLETE
+- P0 Safety Closure Batch 3 SOFTWARE: COMPLETE
+- P0 SOFTWARE SAFETY CLOSURE: COMPLETE
 - Auth coverage for platform and physical-control entry points: HARDENED
 - Tenant, approval and action-plan isolation: HARDENED
 - Unsafe client `force` safety bypass: REMOVED
@@ -32,10 +34,10 @@
 - REAL LOGO CONNECTED = NO
 - REAL MODBUS WRITE = NO
 - REAL HARDWARE ENABLED = NO
+- REAL PHYSICAL FEEDBACK VERIFIED = NO
 
 ## Not yet completed
 
-- P0 Safety Closure Batch 3: Physical confirmation closure
 - Real MQTT TLS commissioning against a provisioned non-production broker
 - LOGO physical-device commissioning
 - Confirmed Modbus mapping
@@ -62,6 +64,8 @@ Do not create a real profile or enable writes until the official documentation, 
 ## Continuation point
 
 ```text
-branch: feature/agrios-p0-edge-runtime
-commit: continue from the Batch 1 security commit on fix/agrios-p0-auth-control-entry
+branch: fix/agrios-p0-physical-confirmation
+commit: continue from fix/agrios-p0-physical-confirmation after its validated Batch 3 commit
 ```
+
+This handoff does not claim `FIELD READY = YES`. The next hardware step remains controlled REAL LOGO read-only commissioning after nameplate, firmware, project backup, official Modbus documentation, actual I/O and manually verified mapping are available.

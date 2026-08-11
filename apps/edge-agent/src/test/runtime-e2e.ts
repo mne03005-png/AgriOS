@@ -11,7 +11,7 @@ type Outcome = { commandId: string; outcome: string; reason?: string };
 const key = 'test-only-machine-key-not-a-production-secret';
 
 async function run() {
-  const startedAt = Date.now(); const directory = await mkdtemp(join(tmpdir(), 'agrios-edge-runtime-'));
+  const startedAt = Date.now(); const directory = await mkdtemp(join(tmpdir(), 'agrios-edge-runtime-')); let crashing: ChildProcess | undefined;
   try {
     const paths = { config: join(directory, 'config.json'), key: join(directory, 'machine.key'), store: join(directory, 'edge-store.json'), cloud: join(directory, 'cloud.json'), input: join(directory, 'input.jsonl'), execution: join(directory, 'execution.jsonl'), outcomes: join(directory, 'outcomes.jsonl') };
     await writeFile(paths.key, key, { mode: 0o600 }); await writeFile(paths.config, JSON.stringify(config(paths)));
@@ -24,8 +24,9 @@ async function run() {
     const queuePeakDepth = pending(afterOffline); assert(queuePeakDepth >= 1050, 'offline telemetry and ACK queue persisted');
 
     await writeFile(paths.input, '');
-    const crashing = spawnChild(paths, { EDGE_FAKE_MQTT_CONNECTED: 'true', EDGE_FAKE_LATENCY_MS: '2000' });
-    await waitForSending(paths.store); await forceTerminate(crashing); const afterCrash = JSON.parse(await readFile(paths.store, 'utf8'));
+    // Keep a deterministic persisted SENDING window and allow for Windows antivirus/fsync startup variance.
+    crashing = spawnChild(paths, { EDGE_FAKE_MQTT_CONNECTED: 'true', EDGE_FAKE_LATENCY_MS: '5000' });
+    await waitForSending(paths.store, crashing); await forceTerminate(crashing); const afterCrash = JSON.parse(await readFile(paths.store, 'utf8'));
     assert([...afterCrash.telemetry, ...afterCrash.acks].some((item: any) => item.status === 'SENDING' || item.queueStatus === 'SENDING'), 'crash occurred during persisted SENDING');
 
     const recovered = await child(paths, { EDGE_FAKE_MQTT_CONNECTED: 'true', EDGE_RUN_ONCE: 'true' }); assert.equal(recovered.code, 0);
@@ -70,7 +71,7 @@ async function run() {
     const output = resolve(process.cwd(), '..', '..', 'artifacts', 'validation'); await mkdir(output, { recursive: true }); const base = join(output, evidence.runId);
     await writeFile(`${base}.json`, `${JSON.stringify(evidence, null, 2)}\n`); await writeFile(`${base}.md`, `# P0 Edge Runtime Evidence\n\n- Standalone child-process runtime: PASS\n- Base telemetry: 1000 generated / ${uniqueTelemetry} unique / ${lostTelemetry} lost\n- Commands: 100 / duplicate physical execution ${duplicatePhysicalExecution}\n- ACK: ${acksGenerated} generated / ${acksUploaded} uploaded / ${lostAck} lost\n- Restart recovery: PASS\n- Graceful shutdown: PASS\n- REAL hardware: NO\n- REAL Modbus write: NO\n`);
     console.log(`P0_EDGE_RUNTIME=PASS telemetry=1000 unique=${uniqueTelemetry} lost=${lostTelemetry} commands=100 duplicate_physical=${duplicatePhysicalExecution} lost_ack=${lostAck} evidence=${base}.json`);
-  } finally { await rm(directory, { recursive: true, force: true }); }
+  } finally { if (crashing && crashing.exitCode === null) await forceTerminate(crashing); await rm(directory, { recursive: true, force: true }); }
 }
 
 function config(paths: any) { return { edgeId: 'edge-runtime', tenantId: 'tenant-runtime', farmId: 'farm-runtime', allowedDeviceIds: ['sensor-1', 'plc-1'], softwareVersion: '0.1.0', configVersion: '1', mqtt: { host: '127.0.0.1', port: 1883, tls: true, clientId: 'edge-runtime', hmacKeyPath: paths.key, telemetryTopic: 'agrios/device/{deviceId}/telemetry', commandsTopic: 'agrios/device/+/command', acksTopic: 'agrios/device/{deviceId}/ack', healthTopic: 'agrios/edge/edge-runtime/status' }, storage: { path: paths.store, maxQueueSize: 5000, maxStorageBytes: 64 * 1024 * 1024, retentionMs: 86400000 }, reconnect: { initialDelayMs: 10, maxDelayMs: 1000, jitter: 0.25 }, plc: { transport: 'FAKE' }, safety: { realWriteEnabled: false }, healthIntervalMs: 100 } as const; }
@@ -82,7 +83,7 @@ async function child(paths: any, overrides: Record<string,string>) { const proce
 async function forceTerminate(childProcess: ChildProcess) { if (childProcess.exitCode !== null) return; if (process.platform === 'win32') execFileSync('taskkill', ['/PID', String(childProcess.pid), '/F', '/T']); else childProcess.kill('SIGKILL'); await exitCode(childProcess); }
 function exitCode(process: ChildProcess) { return new Promise<number | null>((resolve) => process.once('exit', (code) => resolve(code))); }
 async function waitForReady(process: ChildProcess) { await new Promise<void>((resolve, reject) => { let output=''; const timer=setTimeout(()=>reject(new Error('EDGE_READY_TIMEOUT')),5000); process.stdout?.on('data',(x)=>{output+=x;if(output.includes('EDGE_AGENT_READY')){clearTimeout(timer);resolve();}}); process.once('exit',()=>reject(new Error('EDGE_EXITED_BEFORE_READY'))); }); }
-async function waitForSending(path: string) { for (let attempt=0;attempt<1000;attempt++) { try { const state=JSON.parse(await readFile(path,'utf8')); if([...state.telemetry,...state.acks].some((item:any)=>item.status==='SENDING'||item.queueStatus==='SENDING')) return; } catch {} await delay(10); } throw new Error('EDGE_SENDING_STATE_TIMEOUT'); }
+async function waitForSending(path: string, childProcess: ChildProcess) { let stderr=''; childProcess.stderr?.on('data',(value)=>stderr+=value); for (let attempt=0;attempt<3000;attempt++) { if (childProcess.exitCode !== null) throw new Error(`EDGE_EXITED_BEFORE_SENDING:${childProcess.exitCode}:${stderr.trim()}`); try { const state=JSON.parse(await readFile(path,'utf8')); if([...state.telemetry,...state.acks].some((item:any)=>item.status==='SENDING'||item.queueStatus==='SENDING')) return; } catch {} await delay(10); } throw new Error(`EDGE_SENDING_STATE_TIMEOUT_AFTER_30S:${stderr.trim()}`); }
 async function jsonLines(path: string) { try { return (await readFile(path,'utf8')).split(/\r?\n/).filter(Boolean).map((line)=>JSON.parse(line)); } catch { return []; } }
 function pending(state: any) { return state.telemetry.filter((x:any)=>x.status!=='ACKNOWLEDGED').length + state.acks.filter((x:any)=>x.queueStatus!=='ACKNOWLEDGED').length; }
 async function weakNetworkProfiles(directory: string, keyPath: string) { for (const latency of [100,500,2000]) { const paths:any={config:join(directory,`latency-${latency}.json`),key:keyPath,store:join(directory,`latency-${latency}-store.json`),cloud:join(directory,`latency-${latency}-cloud.json`),input:join(directory,`latency-${latency}.jsonl`)}; await writeFile(paths.config,JSON.stringify(config(paths))); await writeFile(paths.input,JSON.stringify(producer()[0])+'\n'); const result=await child(paths,{EDGE_FAKE_MQTT_CONNECTED:'true',EDGE_FAKE_LATENCY_MS:String(latency),EDGE_RUN_ONCE:'true'}); assert.equal(result.code,0); } for (const failure of [5,20,50]) { const paths:any={config:join(directory,`failure-${failure}.json`),key:keyPath,store:join(directory,`failure-${failure}-store.json`),cloud:join(directory,`failure-${failure}-cloud.json`),input:join(directory,`failure-${failure}.jsonl`)}; await writeFile(paths.config,JSON.stringify(config(paths))); await writeFile(paths.input,JSON.stringify(producer()[0])+'\n'); await child(paths,{EDGE_FAKE_MQTT_CONNECTED:'true',EDGE_FAKE_FAILURE_PERCENT:String(failure),EDGE_RUN_ONCE:'true'}); const recovery=await child(paths,{EDGE_FAKE_MQTT_CONNECTED:'true',EDGE_RUN_ONCE:'true'}); assert.equal(recovery.code,0); } }

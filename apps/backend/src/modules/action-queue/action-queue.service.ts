@@ -118,12 +118,13 @@ export class ActionQueueService implements OnModuleDestroy {
     if (claimed.count !== 1) return;
     try {
       const plan = await this.actionExecutor.executePlan(job.actionPlanId, { tenantId: job.tenantId });
+      const physicallyComplete = plan.status === 'EXECUTED';
       const updatedJob = await (this.prisma as any).actionQueueJob.update({
         where: { id },
-        data: { status: 'SUCCESS', finishedAt: new Date(), actionExecutionId: plan.executions?.[0]?.id }
+        data: { status: physicallyComplete ? 'SUCCESS' : plan.status === 'FAILED' ? 'FAILED' : 'AWAITING_CONFIRMATION', finishedAt: physicallyComplete || plan.status === 'FAILED' ? new Date() : null, actionExecutionId: plan.executions?.[0]?.id }
       });
       await this.executionResultLinker.linkActionPlanResult(job.actionPlanId, updatedJob);
-      this.eventBus.publish('action.execution.completed', { jobId: id, actionPlanId: job.actionPlanId, farmId: job.farmId });
+      this.eventBus.publish(physicallyComplete ? 'action.execution.completed' : 'action.execution.awaiting_confirmation', { jobId: id, actionPlanId: job.actionPlanId, farmId: job.farmId });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const retryCount = job.retryCount + 1;

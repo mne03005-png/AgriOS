@@ -220,7 +220,7 @@ export class MobileService {
       monthlyWaterUsage: 0,
       waterPerMu: 0,
       deviceOnlineRate: deviceCount ? Number(((onlineDeviceCount / deviceCount) * 100).toFixed(2)) : 0,
-      actionExecutionSuccessRate: executions.length ? Number(((executions.filter((item: any) => ['SENT', 'ACKED'].includes(item.status)).length / executions.length) * 100).toFixed(2)) : 0,
+      actionExecutionSuccessRate: executions.length ? Number(((executions.filter((item: any) => item.status === 'PHYSICALLY_CONFIRMED').length / executions.length) * 100).toFixed(2)) : 0,
       aiAdoptionRate: decisions ? 0 : 0,
       irrigationVolumeSummary: {
         quantity: waterUsage.reduce((sum: number, item: any) => sum + Number(item.quantity ?? 0), 0),

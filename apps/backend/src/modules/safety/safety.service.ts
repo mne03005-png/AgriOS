@@ -112,7 +112,8 @@ export class SafetyService {
     }
     const dispatch = targets.length === 0 ? 'NO_CONTROLLABLE_TARGET' : results.every((item) => item.ok) ? 'DISPATCHED' : 'DISPATCH_FAILED';
     await this.operationLog.create({ action: 'EMERGENCY_STOP_DISPATCH_RESULT', targetType: input.fieldId ? 'FIELD' : 'FARM', targetId: input.fieldId ?? input.farmId, description: 'Software Emergency Stop dispatch result', metadata: { ...auditMetadata, dispatchResult: dispatch } });
-    return { ok: dispatch === 'DISPATCHED', state: 'LATCHED', latchId: latch.id, dispatch, targetCount: targets.length, results };
+    const physicalConfirmation = results.length > 0 && results.every((item) => (item.result as any)?.physicalConfirmed === true) ? 'PHYSICALLY_CONFIRMED' : dispatch === 'DISPATCHED' ? 'CONFIRMATION_PENDING' : 'CONFIRMATION_FAILED';
+    return { ok: dispatch === 'DISPATCHED', state: 'LATCHED', latchId: latch.id, dispatch, physicalConfirmation, targetCount: targets.length, results };
   }
 
   private async resetEmergencyStop(scope: { tenantId: string; farmId: string; fieldId?: string }) {
@@ -122,7 +123,7 @@ export class SafetyService {
   }
 
   private dispatchSucceeded(result: unknown) {
-    return Boolean(result && typeof result === 'object' && (!('ok' in result) || (result as any).ok) && (result as any).executed !== false);
+    return Boolean(result && typeof result === 'object' && (!('ok' in result) || (result as any).ok) && ((result as any).accepted === true || (result as any).transportAccepted === true || (result as any).executed === true));
   }
 
   async assertDangerousStartAllowed(scope: { tenantId: string; farmId?: string; fieldId?: string }) {

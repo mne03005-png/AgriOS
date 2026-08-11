@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EventBusService } from '../event-bus/event-bus.service';
+import { aggregatePhysicalStatus } from './physical-confirmation';
 
 @Injectable()
 export class ExecutionResultLinkerService {
@@ -16,11 +17,12 @@ export class ExecutionResultLinkerService {
     });
     if (!plan) return null;
     const executions = plan.executions ?? [];
-    const failed = executions.filter((item: any) => item.status === 'FAILED');
-    const success = executions.filter((item: any) => ['SENT', 'ACKED'].includes(item.status));
+    const failed = executions.filter((item: any) => ['FAILED', 'FEEDBACK_MISMATCH', 'FEEDBACK_TIMEOUT'].includes(item.status));
+    const success = executions.filter((item: any) => item.status === 'PHYSICALLY_CONFIRMED');
     const businessRef = await this.resolveBusinessRef(plan);
     if (!businessRef) return null;
-    const status = failed.length > 0 || plan.status === 'FAILED' ? 'FAILED' : 'SUCCESS';
+    const physicalState = aggregatePhysicalStatus(executions);
+    const status = failed.length > 0 || plan.status === 'FAILED' ? 'FAILED' : physicalState === 'CONFIRMED' ? 'SUCCESS' : 'AWAITING_CONFIRMATION';
     const payload = {
       actionPlanId,
       queueJobId: queueJob?.id,
@@ -30,6 +32,8 @@ export class ExecutionResultLinkerService {
       status,
       executions
     };
+
+    if (status === 'AWAITING_CONFIRMATION') return payload;
 
     if (businessRef.type === 'IrrigationRotationRun') {
       return this.linkRotationRun(businessRef.record, plan, payload);
@@ -96,20 +100,27 @@ export class ExecutionResultLinkerService {
       data: { status: payload.status, finishedAt: new Date(), resultJson }
     });
     await this.upsertReport({ tenantId: run.tenantId, farmId: run.farmId, type: 'ROTATION', refId: run.id, title: '轮灌执行报告', summaryJson: { runId: run.id, fieldId: plan.fieldId }, metricsJson: resultJson });
-    await this.createActivityOnce({ tenantId: run.tenantId, farmId: run.farmId, fieldId: plan.fieldId, type: 'ROTATION_COMPLETED', title: `轮灌执行${payload.status === 'SUCCESS' ? '完成' : '失败'}`, refType: 'IrrigationRotationRun', refId: run.id, metadata: resultJson });
-    await this.recordUsageOnce(run.tenantId, run.farmId, plan.fieldId, 'IRRIGATION_ACTION', run.id, 'IrrigationRotationRun');
+    if (payload.status === 'SUCCESS') {
+      await this.createActivityOnce({ tenantId: run.tenantId, farmId: run.farmId, fieldId: plan.fieldId, type: 'ROTATION_COMPLETED', title: '轮灌执行完成', refType: 'IrrigationRotationRun', refId: run.id, metadata: resultJson });
+      await this.recordUsageOnce(run.tenantId, run.farmId, plan.fieldId, 'IRRIGATION_ACTION', run.id, 'IrrigationRotationRun');
+    }
     this.eventBus.publish('execution.result.rotation.linked', { farmId: run.farmId, fieldId: plan.fieldId, runId: run.id, status: payload.status }, run.tenantId);
     return updated;
   }
 
   private async linkFertigationTask(task: any, plan: any, payload: any) {
+    if (payload.status === 'SUCCESS') {
+      const claim = await (this.prisma as any).fertigationTask.updateMany({ where: { id: task.id, status: { not: 'SUCCESS' } }, data: { status: 'SUCCESS', finishedAt: new Date() } });
+      if (claim.count !== 1) return (this.prisma as any).fertigationTask.findUnique({ where: { id: task.id } });
+    }
     const actions = Array.isArray(plan.actions) ? plan.actions : [];
     const firstPayload = actions[0]?.payload ?? {};
     const tank = task.tankId ? await (this.prisma as any).fertilizerTank.findUnique({ where: { id: task.tankId } }) : null;
     const targetFertilizerVolume = Number(task.targetFertilizerVolume ?? firstPayload.targetFertilizerVolume ?? 0);
     const tankBeforeLevel = Number(tank?.currentLevelL ?? 0);
     const tankAfterLevel = tank ? Math.max(tankBeforeLevel - targetFertilizerVolume, 0) : null;
-    if (tank && payload.status === 'SUCCESS') {
+    const completionAlreadyApplied = task.resultJson?.physicalCompletionApplied === true;
+    if (tank && payload.status === 'SUCCESS' && !completionAlreadyApplied) {
       await (this.prisma as any).fertilizerTank.update({ where: { id: tank.id }, data: { currentLevelL: tankAfterLevel } });
     }
     const resultJson = {
@@ -121,15 +132,18 @@ export class ExecutionResultLinkerService {
       tankAfterLevel,
       anomalies: [],
       actionPlanId: plan.id,
-      queueJobId: payload.queueJobId
+      queueJobId: payload.queueJobId,
+      physicalCompletionApplied: payload.status === 'SUCCESS' || completionAlreadyApplied
     };
     const updated = await (this.prisma as any).fertigationTask.update({
       where: { id: task.id },
       data: { status: payload.status, finishedAt: new Date(), resultJson }
     });
     await this.upsertReport({ tenantId: task.tenantId, farmId: task.farmId, type: 'FERTIGATION', refId: task.id, title: '水肥执行报告', summaryJson: { taskId: task.id, fieldId: task.fieldId }, metricsJson: resultJson });
-    await this.createActivityOnce({ tenantId: task.tenantId, farmId: task.farmId, fieldId: task.fieldId, type: 'FERTIGATION_COMPLETED', title: `水肥任务${payload.status === 'SUCCESS' ? '完成' : '失败'}`, refType: 'FertigationTask', refId: task.id, metadata: resultJson });
-    await this.recordUsageOnce(task.tenantId, task.farmId, task.fieldId, 'IRRIGATION_ACTION', task.id, 'FertigationTask');
+    if (payload.status === 'SUCCESS') {
+      await this.createActivityOnce({ tenantId: task.tenantId, farmId: task.farmId, fieldId: task.fieldId, type: 'FERTIGATION_COMPLETED', title: '水肥任务完成', refType: 'FertigationTask', refId: task.id, metadata: resultJson });
+      await this.recordUsageOnce(task.tenantId, task.farmId, task.fieldId, 'IRRIGATION_ACTION', task.id, 'FertigationTask');
+    }
     this.eventBus.publish('execution.result.fertigation.linked', { farmId: task.farmId, fieldId: task.fieldId, taskId: task.id, status: payload.status }, task.tenantId);
     return updated;
   }

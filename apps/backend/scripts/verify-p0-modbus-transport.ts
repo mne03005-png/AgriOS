@@ -7,9 +7,9 @@ import { PlcGatewayDeviceController } from '../src/modules/device-control/adapte
 import { PlcControlAction, PlcControlCommand } from '../src/modules/device-control/plc-control.types';
 
 // TEST_ONLY addresses. They are not Siemens LOGO! addresses and must never enter a real profile.
-const TEST = { coil: 10, stop: 11, discrete: 20, holding: 30, input: 40 } as const;
+const TEST = { coil: 10, stop: 11, discrete: 20, valveOpenFeedback: 21, valveCloseFeedback: 22, pumpRunningFeedback: 23, overloadFeedback: 24, emergencyFeedback: 25, holding: 30, input: 40 } as const;
 const coils = new Map<number, boolean>([[TEST.coil, false], [TEST.stop, false]]);
-const discrete = new Map<number, boolean>([[TEST.discrete, true]]);
+const discrete = new Map<number, boolean>([[TEST.discrete, true], [TEST.valveOpenFeedback, false], [TEST.valveCloseFeedback, true], [TEST.pumpRunningFeedback, false], [TEST.overloadFeedback, false], [TEST.emergencyFeedback, false]]);
 const holding = new Map<number, number>([[TEST.holding, 123]]);
 const input = new Map<number, number>([[TEST.input, 456]]);
 let coilWrites = 0;
@@ -29,7 +29,7 @@ async function startServer(port: number, unitId = 7) {
     getDiscreteInput: (address: number) => discrete.get(address) ?? false,
     getHoldingRegister: (address: number) => holding.get(address) ?? 0,
     getInputRegister: (address: number) => input.get(address) ?? 0,
-    setCoil: (address: number, value: boolean) => { coilWrites += 1; coils.set(address, value); },
+    setCoil: (address: number, value: boolean) => { coilWrites += 1; coils.set(address, value); if (address === TEST.coil) { discrete.set(TEST.valveOpenFeedback, value); discrete.set(TEST.valveCloseFeedback, !value); } if (address === TEST.stop) discrete.set(TEST.pumpRunningFeedback, false); },
     setRegister: (address: number, value: number) => { holding.set(address, value); }
   }, { host: '127.0.0.1', port, unitID: unitId });
   await new Promise<void>((resolve, reject) => { server.once('initialized', () => resolve()); server.once('serverError', reject); });
@@ -40,7 +40,8 @@ const configFor = (port: number, overrides: Record<string, unknown> = {}) => new
   NODE_ENV: 'test', DEVICE_CONTROL_MODE: 'PLC_GATEWAY', DEVICE_CONTROL_DRY_RUN: 'false', VALVE_ALLOW_REAL_CONTROL: 'true',
   ENABLE_AUTO_EXECUTION: 'true', PLC_TRANSPORT: 'MODBUS_TCP', PLC_REAL_WRITE_ENABLED: 'true', PLC_MODBUS_HOST: '127.0.0.1',
   PLC_MODBUS_PORT: String(port), PLC_MODBUS_UNIT_ID: '7', PLC_CONNECT_TIMEOUT_MS: '100', PLC_COMMAND_TIMEOUT_MS: '150', PLC_COMMAND_RETRY: '1',
-  PLC_PROFILE: { unitId: 7, points: { valveOpen: { type: 'coil', address: TEST.coil }, valveClose: { type: 'coil', address: TEST.stop }, pumpStart: { type: 'coil', address: TEST.coil }, pumpStop: { type: 'coil', address: TEST.stop } } },
+  PLC_FEEDBACK_TIMEOUT_MS: '80', PLC_FEEDBACK_POLL_INTERVAL_MS: '5',
+  PLC_PROFILE: { testOnly: true, unitId: 7, points: { valveOpen: { type: 'coil', address: TEST.coil }, valveClose: { type: 'coil', address: TEST.stop }, pumpStart: { type: 'coil', address: TEST.coil }, pumpStop: { type: 'coil', address: TEST.stop }, emergencyStop: { type: 'discreteInput', address: TEST.emergencyFeedback }, noWater: { type: 'discreteInput', address: TEST.overloadFeedback }, overloadTrip: { type: 'discreteInput', address: TEST.overloadFeedback }, valveOpenFeedback: { type: 'discreteInput', address: TEST.valveOpenFeedback }, valveCloseFeedback: { type: 'discreteInput', address: TEST.valveCloseFeedback }, pumpRunningFeedback: { type: 'discreteInput', address: TEST.pumpRunningFeedback } } },
   ...overrides
 });
 
@@ -89,17 +90,17 @@ async function run() {
   const controller = new PlcGatewayDeviceController(configFor(port), chainTransport);
   (controller as any).status.online = true;
   const duplicate = command('VALVE_OPEN');
-  const before = coilWrites; await controller.execute(duplicate); await controller.execute(duplicate);
-  assert.equal(coilWrites, before + 1, '13 duplicate command writes once');
+  const before = coilWrites; const firstDuplicate = await controller.execute(duplicate); await controller.execute(duplicate);
+  assert.equal(coilWrites, before + 1, `13 duplicate command writes once (${firstDuplicate.status}:${firstDuplicate.errorCode ?? 'OK'})`);
   await controller.execute(command('PUMP_OFF')); assert.equal(coils.get(TEST.stop), true, '14 STOP priority');
   await controller.emergencyStop(command('EMERGENCY_STOP')); assert.equal(coils.get(TEST.stop), true, '15 emergency stop uses stop output');
 
   const feedbackCommand = command('VALVE_OPEN');
   const mismatch = await controller.verifyFeedback(feedbackCommand, { commandId: feedbackCommand.commandId, tenantId: 'wrong', farmId: feedbackCommand.farmId, deviceId: feedbackCommand.deviceId, status: 'SUCCEEDED', timestamp: new Date().toISOString() });
   assert.equal(mismatch.errorCode, 'FEEDBACK_IDENTITY_MISMATCH', '16 feedback mismatch');
-  (controller as any).status.valveOpen = false;
+  discrete.set(TEST.valveOpenFeedback, false);
   assert.equal((await controller.execute(command('PUMP_ON'))).errorCode, 'PUMP_INTERLOCK_BLOCKED', '17 valve-open then pump-start interlock');
-  (controller as any).status.pumpRunning = true;
+  discrete.set(TEST.pumpRunningFeedback, true);
   assert.equal((await controller.execute(command('VALVE_CLOSE'))).errorCode, 'STOP_PUMP_BEFORE_VALVE_CLOSE', '18 pump-stop then valve-close sequence');
 
   const blocked = new ModbusTcpTransport(configFor(port, { PLC_REAL_WRITE_ENABLED: 'false' }));

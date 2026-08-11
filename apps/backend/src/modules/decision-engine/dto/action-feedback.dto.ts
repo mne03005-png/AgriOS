@@ -4,7 +4,7 @@ import { Allow } from 'class-validator';
 export class ActionFeedbackDto {
   @ApiPropertyOptional({ description: '设备或人工反馈状态', example: 'ACKED' })
   @Allow()
-  status?: 'ACKED' | 'FAILED' | 'SKIPPED';
+  status?: 'PHYSICALLY_CONFIRMED' | 'FEEDBACK_MISMATCH' | 'FEEDBACK_TIMEOUT' | 'OUTCOME_UNKNOWN' | 'FAILED';
 
   @ApiPropertyOptional({ description: '反馈备注', example: '水泵已启动，现场人工确认正常' })
   @Allow()

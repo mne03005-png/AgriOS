@@ -129,7 +129,8 @@ export class ValveControlService {
       }
     });
 
-    const executionStatus = nextStatus === 'ACKED' ? 'ACKED' : 'FAILED';
+    // Protocol ACK proves receipt/software handling only. Physical completion is reconciled separately.
+    const executionStatus = nextStatus === 'ACKED' ? 'FEEDBACK_PENDING' : 'FAILED';
     await (this.prisma as any).actionExecution.updateMany({
       where: { requestId: ack.commandId },
       data: {

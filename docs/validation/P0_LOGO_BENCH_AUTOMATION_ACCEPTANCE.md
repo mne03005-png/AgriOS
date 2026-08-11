@@ -55,6 +55,8 @@ Acceptance requires all of the following:
 
 The runner also verifies expiry boundaries, valve-open/pump-start and pump-stop/valve-close interlocks, E-stop blocking, STOP safe-state availability, ACK tenant/farm/device/command correlation, test-profile exclusion from REAL mode, and CLI bypass rejection. The existing P0 Modbus suite covers connect/command timeout, disconnect/reconnect, invalid unit/address, and fake-only Modbus reads/writes.
 
+ACK results in this historical automation report are software/test acknowledgements. They are not evidence of real physical completion; Batch 3 requires separately verified profile-backed state before business completion.
+
 Evidence is written beneath `artifacts/validation/` as JSON and Markdown. It records the Git revision, branch, profile hash, fake target, per-cycle timings/results, and aggregate safety metrics. It contains no secret material.
 
 ## Remaining real-hardware evidence

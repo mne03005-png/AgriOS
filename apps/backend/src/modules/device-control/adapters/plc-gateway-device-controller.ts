@@ -5,15 +5,19 @@ import { PlcCommandResult, PlcControlCommand, PlcControllerPort, PlcFeedback, Pl
 import { ModbusTcpTransport } from '../transports/modbus-tcp.transport';
 
 type PlcProfile = {
+  testOnly?: boolean;
+  realHardwareApproved?: boolean;
   unitId: number | null;
+  transport?: { unitId?: number | null };
   registers?: Record<string, number | null>;
   points?: Record<string, { type: string; address: number | null; scale?: number | null }>;
+  mapping?: Array<{ logicalName: string; type?: string; functionCode: string; address: number | null; feedbackPoint?: string }>;
 };
 
 @Injectable()
 export class PlcGatewayDeviceController implements PlcControllerPort {
   private readonly results = new Map<string, PlcCommandResult>();
-  private status: PlcStatus = { online: false, emergencyStop: false, noWater: false, overloadTrip: false, pumpRunning: false, valveOpen: false };
+  private status: PlcStatus = { online: false, emergencyStop: false, noWater: false, overloadTrip: false, pumpRunning: false, valveOpen: false, observedAt: new Date(0).toISOString(), source: 'MEMORY', fresh: false, stale: true };
   private readonly executionCounts = new Map<string, number>();
 
   constructor(private readonly config: ConfigService, @Optional() private readonly modbusTransport?: ModbusTcpTransport) {}
@@ -26,8 +30,10 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
     if (Date.parse(command.expiresAt) <= Date.now()) return this.remember(command, this.rejected(command, 'EXPIRED', 'COMMAND_EXPIRED'));
     if (!this.realExecutionEnabled()) return this.remember(command, this.rejected(command, 'SAFETY_BLOCKED', 'REAL_CONTROL_DISABLED'));
     if (!this.profileConfigured()) return this.remember(command, this.rejected(command, 'REJECTED', 'PLC_PROFILE_UNCONFIGURED'));
-    if (!this.status.online) return this.remember(command, this.rejected(command, 'REJECTED', 'CONTROLLER_OFFLINE'));
-    if (command.action === 'PUMP_ON' && (this.status.emergencyStop || this.status.noWater || this.status.overloadTrip || !this.status.valveOpen)) {
+    const status = await this.readStatus(command.deviceId);
+    if (!status.online) return this.remember(command, this.rejected(command, 'REJECTED', status.errorCode ?? 'CONTROLLER_OFFLINE'));
+    if (this.requiresFreshStatus(command.action) && !status.fresh) return this.remember(command, this.rejected(command, 'SAFETY_BLOCKED', 'STALE_PLC_STATUS'));
+    if (command.action === 'PUMP_ON' && (status.emergencyStop || status.noWater || status.overloadTrip || !status.valveOpen)) {
       return this.remember(command, this.rejected(command, 'SAFETY_BLOCKED', 'PUMP_INTERLOCK_BLOCKED'));
     }
     if (command.action === 'VALVE_OPEN' && this.status.emergencyStop) {
@@ -48,10 +54,11 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
         this.status.emergencyStop = true;
         this.status.pumpRunning = false;
       }
+      this.status.observedAt = new Date().toISOString(); this.status.source = 'FAKE_FEEDBACK'; this.status.fresh = true; this.status.stale = false;
       const now = new Date().toISOString();
       return this.remember(command, {
         commandId: command.commandId, accepted: true, executed: true, acknowledged: true,
-        status: 'SUCCEEDED', startedAt: now, completedAt: now, feedback: { fake: true, ...this.status }
+        status: 'SUCCEEDED', physicalConfirmed: true, transportAccepted: true, startedAt: now, completedAt: now, feedback: { fake: true, ...this.status }
       });
     }
     if (this.config.get<string>('PLC_TRANSPORT') === 'MODBUS_TCP') {
@@ -69,7 +76,27 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
       ? this.fromLegacy(commandOrDeviceId, 'EMERGENCY_STOP', payload)
       : this.execute({ ...commandOrDeviceId, action: 'EMERGENCY_STOP' });
   }
-  async readStatus(_deviceId: string) { return { ...this.status }; }
+  async readStatus(_deviceId: string): Promise<PlcStatus> {
+    if (this.config.get<string>('NODE_ENV') === 'test' && this.config.get<string>('PLC_GATEWAY_FAKE_TRANSPORT') === 'true') {
+      return { ...this.status, observedAt: new Date().toISOString(), source: 'FAKE_FEEDBACK', fresh: true, stale: false };
+    }
+    if (this.config.get<string>('PLC_TRANSPORT') !== 'MODBUS_TCP') return this.withFreshness({ ...this.status });
+    if (!this.profileConfigured()) return this.unavailableStatus('PLC_PROFILE_UNCONFIRMED');
+    if (!this.modbusTransport) return this.unavailableStatus('PLC_TRANSPORT_UNAVAILABLE');
+    const profile = this.config.get<PlcProfile>('PLC_PROFILE');
+    const required = ['emergencyStop', 'noWater', 'overloadTrip', 'pumpRunningFeedback', 'valveOpenFeedback'] as const;
+    const points = required.map((name) => [name, this.feedbackPoint(profile, name)] as const);
+    if (points.some(([, point]) => !point)) return this.unavailableStatus('FEEDBACK_UNAVAILABLE');
+    try {
+      const values: boolean[] = [];
+      for (const [, point] of points) values.push(await this.readPoint(point!));
+      const observedAt = new Date().toISOString();
+      this.status = { online: true, emergencyStop: values[0], noWater: values[1], overloadTrip: values[2], pumpRunning: values[3], valveOpen: values[4], observedAt, source: 'MODBUS_TCP', fresh: true, stale: false };
+      return { ...this.status };
+    } catch {
+      return this.unavailableStatus('PLC_STATUS_READ_FAILED');
+    }
+  }
   async healthCheck() {
     const transport = this.modbusTransport ? await this.modbusTransport.healthCheck() : undefined;
     return {
@@ -82,9 +109,15 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
     if (feedback.commandId !== command.commandId || feedback.tenantId !== command.tenantId || feedback.farmId !== command.farmId || feedback.deviceId !== command.deviceId) {
       return this.rejected(command, 'FAILED', 'FEEDBACK_IDENTITY_MISMATCH');
     }
+    const evidence = feedback.feedback ?? {};
+    const observedAt = Date.parse(String(evidence.observedAt ?? ''));
+    const sourceAllowed = evidence.source === 'MODBUS_TCP' || (evidence.source === 'FAKE_FEEDBACK' && this.config.get<string>('NODE_ENV') === 'test');
+    const physicalConfirmed = feedback.status === 'SUCCEEDED' && evidence.physicalConfirmed === true && sourceAllowed && Number.isFinite(observedAt)
+      && evidence.expectedState !== undefined && evidence.expectedState === evidence.observedState;
+    const failed = feedback.status === 'FAILED';
     const result: PlcCommandResult = {
-      commandId: command.commandId, accepted: true, executed: feedback.status === 'SUCCEEDED', acknowledged: true,
-      status: feedback.status, completedAt: feedback.timestamp, feedback: feedback.feedback, errorCode: feedback.errorCode
+      commandId: command.commandId, accepted: !failed, executed: physicalConfirmed, physicalConfirmed, transportAccepted: true, acknowledged: true,
+      status: failed ? 'FAILED' : physicalConfirmed ? 'PHYSICALLY_CONFIRMED' : 'ACKNOWLEDGED', completedAt: physicalConfirmed || failed ? feedback.timestamp : undefined, feedback: evidence, errorCode: feedback.errorCode
     };
     this.results.set(command.commandId, result);
     return result;
@@ -132,8 +165,13 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
   }
   private profileConfigured() {
     const profile = this.config.get<PlcProfile>('PLC_PROFILE');
-    const addresses = profile?.points ? Object.values(profile.points).map((point) => point.address) : Object.values(profile?.registers ?? {});
-    return Boolean(profile && Number.isInteger(profile.unitId) && addresses.length > 0 && addresses.every(Number.isInteger));
+    const addresses = profile?.mapping?.length ? profile.mapping.map((point) => point.address) : profile?.points ? Object.values(profile.points).map((point) => point.address) : Object.values(profile?.registers ?? {});
+    const unitId = profile?.transport?.unitId ?? profile?.unitId;
+    const configuredUnitId = Number(this.config.get<string>('PLC_MODBUS_UNIT_ID') ?? unitId);
+    const testProfileAllowed = this.config.get<string>('NODE_ENV') === 'test' && profile?.testOnly === true;
+    const approvedRealProfile = profile?.realHardwareApproved === true && Array.isArray(profile.mapping) && profile.mapping.length > 0
+      && profile.mapping.every((item) => Number.isInteger(item.address) && typeof item.logicalName === 'string' && item.logicalName.trim() && typeof item.functionCode === 'string' && item.functionCode !== 'UNCONFIRMED' && typeof item.feedbackPoint === 'string' && item.feedbackPoint !== 'UNCONFIRMED');
+    return Boolean(profile && Number.isInteger(unitId) && configuredUnitId === unitId && addresses.length > 0 && addresses.every(Number.isInteger) && (testProfileAllowed || approvedRealProfile || this.config.get<string>('PLC_TRANSPORT') !== 'MODBUS_TCP'));
   }
   private async executeModbus(command: PlcControlCommand): Promise<PlcCommandResult> {
     if (!this.modbusTransport) return this.rejected(command, 'REJECTED', 'PLC_TRANSPORT_UNAVAILABLE');
@@ -142,19 +180,81 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
     };
     const pointName = logicalPoint[command.action];
     const profile = this.config.get<PlcProfile>('PLC_PROFILE');
-    const point = pointName ? profile?.points?.[pointName] : undefined;
+    const mappedPoint = pointName ? profile?.mapping?.find((item) => item.logicalName === pointName) : undefined;
+    const point = pointName ? profile?.points?.[pointName] ?? mappedPoint : undefined;
     if (!point || !Number.isInteger(point.address)) return this.rejected(command, 'REJECTED', 'PLC_POINT_UNCONFIRMED');
     const startedAt = new Date().toISOString();
     await this.modbusTransport.writeCoil(point.address as number, true);
-    return {
-      commandId: command.commandId, accepted: true, executed: true, acknowledged: false,
-      status: 'ACK_PENDING', startedAt, feedback: { transport: 'MODBUS_TCP', logicalPoint: pointName }
+    const pending: PlcCommandResult = {
+      commandId: command.commandId, accepted: true, executed: false, physicalConfirmed: false, transportAccepted: true, acknowledged: false,
+      status: 'FEEDBACK_PENDING', startedAt, feedback: { transport: 'MODBUS_TCP', logicalPoint: pointName }
     };
+    return this.pollPhysicalFeedback(command, pending, profile);
   }
   private rejected(command: Pick<PlcControlCommand, 'commandId'>, status: PlcCommandResult['status'], errorCode: string): PlcCommandResult {
     return { commandId: command.commandId, accepted: false, executed: false, acknowledged: false, status, errorCode, completedAt: new Date().toISOString() };
   }
   private remember(command: PlcControlCommand, result: PlcCommandResult) { this.results.set(command.commandId, result); return result; }
+  private requiresFreshStatus(action: PlcControlCommand['action']) { return ['PUMP_ON', 'VALVE_CLOSE', 'IRRIGATION_START'].includes(action); }
+  private withFreshness(status: PlcStatus) {
+    const maxAge = Number(this.config.get<string>('PLC_FEEDBACK_MAX_AGE_MS') ?? 5000);
+    const fresh = Number.isInteger(maxAge) && maxAge > 0 && Date.now() - Date.parse(status.observedAt) <= maxAge;
+    return { ...status, fresh, stale: !fresh };
+  }
+  private unavailableStatus(errorCode: string): PlcStatus { return { ...this.status, online: false, fresh: false, stale: true, errorCode }; }
+  private feedbackPoint(profile: PlcProfile | undefined, logicalName: string) {
+    const mapped = profile?.mapping?.find((item) => item.logicalName === logicalName || item.feedbackPoint === logicalName);
+    if (mapped && Number.isInteger(mapped.address) && mapped.functionCode && mapped.functionCode !== 'UNCONFIRMED') return { address: mapped.address as number, type: mapped.type ?? mapped.functionCode };
+    if (profile?.testOnly === true) {
+      const point = profile.points?.[logicalName];
+      if (point && Number.isInteger(point.address)) return { address: point.address as number, type: point.type };
+    }
+    return undefined;
+  }
+  private async readPoint(point: { address: number; type: string }) {
+    const type = point.type.toLowerCase();
+    if (type.includes('discrete') || type === '2') return this.modbusTransport!.readDiscreteInput(point.address);
+    if (type.includes('coil') || type === '1') return this.modbusTransport!.readCoil(point.address);
+    if (type.includes('inputregister') || type === '4') return Boolean(await this.modbusTransport!.readInputRegister(point.address));
+    if (type.includes('holding') || type === '3') return Boolean(await this.modbusTransport!.readHoldingRegister(point.address));
+    throw new Error('FEEDBACK_FUNCTION_UNSUPPORTED');
+  }
+  private async pollPhysicalFeedback(command: PlcControlCommand, pending: PlcCommandResult, profile?: PlcProfile): Promise<PlcCommandResult> {
+    const expected: Partial<Record<PlcControlCommand['action'], { point: string; value: boolean; contradictory?: string }>> = {
+      VALVE_OPEN: { point: 'valveOpenFeedback', value: true, contradictory: 'valveCloseFeedback' },
+      VALVE_CLOSE: { point: 'valveCloseFeedback', value: true, contradictory: 'valveOpenFeedback' },
+      PUMP_ON: { point: 'pumpRunningFeedback', value: true },
+      PUMP_OFF: { point: 'pumpRunningFeedback', value: false },
+      EMERGENCY_STOP: { point: 'pumpRunningFeedback', value: false }
+    };
+    const target = expected[command.action];
+    const point = target ? this.feedbackPoint(profile, target.point) : undefined;
+    if (!target || !point) return { ...pending, status: 'FEEDBACK_UNAVAILABLE', errorCode: 'FEEDBACK_UNAVAILABLE' };
+    const timeoutMs = this.boundedConfig('PLC_FEEDBACK_TIMEOUT_MS', 2000, 1, 60_000);
+    const intervalMs = this.boundedConfig('PLC_FEEDBACK_POLL_INTERVAL_MS', 100, 1, timeoutMs);
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() <= deadline) {
+      try {
+        const value = await this.readPoint(point);
+        if (value === target.value) {
+          const completedAt = new Date().toISOString();
+          return { ...pending, status: 'PHYSICALLY_CONFIRMED', executed: true, physicalConfirmed: true, acknowledged: true, completedAt, feedback: { ...pending.feedback, fake: profile?.testOnly === true, observedAt: completedAt, source: 'MODBUS_TCP', logicalPoint: target.point, value } };
+        }
+        const contradictory = target.contradictory ? this.feedbackPoint(profile, target.contradictory) : undefined;
+        if (contradictory && await this.readPoint(contradictory)) return { ...pending, status: 'FEEDBACK_MISMATCH', errorCode: 'FEEDBACK_MISMATCH', completedAt: new Date().toISOString() };
+      } catch {
+        return { ...pending, status: 'OUTCOME_UNKNOWN', errorCode: 'PLC_DISCONNECTED_DURING_CONFIRMATION', completedAt: new Date().toISOString() };
+      }
+      if (Date.now() >= deadline) break;
+      await new Promise((resolve) => setTimeout(resolve, Math.min(intervalMs, deadline - Date.now())));
+    }
+    return { ...pending, status: 'FEEDBACK_TIMEOUT', errorCode: 'FEEDBACK_TIMEOUT', completedAt: new Date().toISOString() };
+  }
+  private boundedConfig(key: string, fallback: number, min: number, max: number) {
+    const value = Number(this.config.get<string>(key) ?? fallback);
+    if (!Number.isInteger(value) || value < min || value > max) throw new Error(`INVALID_${key}`);
+    return value;
+  }
   private unsupported(deviceId: string, command: string, payload?: DeviceControlPayload, errorCode = 'PLC_COMMAND_UNSUPPORTED') {
     return { adapter: 'PLC_GATEWAY', deviceId, command, payload, ok: false, errorCode };
   }

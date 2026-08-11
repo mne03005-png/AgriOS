@@ -133,7 +133,7 @@ export class IrrigationRotationService {
     });
 
     const queueJob = await this.actionQueueService.enqueue({ farmId: group.farmId, actionPlanId: actionPlan.id });
-    await this.recordUsage(group, fieldId, run.id, actions.length);
+    // Final usage is recorded idempotently by ExecutionResultLinker after physical confirmation.
     this.eventBus.publish('irrigation.rotation.started', { farmId: group.farmId, fieldId, groupId, runId: run.id, actionPlanId: actionPlan.id }, group.tenantId);
     await this.farmActivityService.create({
       tenantId: group.tenantId,

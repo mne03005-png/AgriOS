@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RequestContextService } from '../../common/request-context.service';
 import { hasPermissions } from '../../common/permissions/permission-matrix';
@@ -9,6 +9,7 @@ import { OperationLogService } from '../operation-log/operation-log.service';
 import { SafetyService } from '../safety/safety.service';
 import { ActionPlanExecutionMode } from './dto/execute-action-plan.dto';
 import { isDangerousStart, isStopAction } from '@agrios/edge-core';
+import { aggregatePhysicalStatus, resultExecutionStatus } from '../execution/physical-confirmation';
 
 interface ActionPlanExecutionContext {
   mode?: ActionPlanExecutionMode;
@@ -29,7 +30,7 @@ type SupportedCommand =
   | 'STOP_DISSOLVING';
 
 @Injectable()
-export class ActionExecutorService {
+export class ActionExecutorService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly deviceControlService: DeviceControlService,
@@ -38,6 +39,8 @@ export class ActionExecutorService {
     private readonly safetyService: SafetyService,
     private readonly requestContext: RequestContextService
   ) {}
+
+  async onModuleInit() { await this.reconcileInterruptedDispatches(); }
 
   async executePlan(actionPlanId: string, execution: ActionPlanExecutionContext = {}) {
     const tenantId = execution.tenantId ?? this.requestContext.getTenantId();
@@ -81,7 +84,8 @@ export class ActionExecutorService {
       executions.push(execution);
     }
 
-    const finalStatus = executions.some((item) => item.status === 'FAILED') ? 'FAILED' : 'EXECUTED';
+    const physicalState = aggregatePhysicalStatus(executions);
+    const finalStatus = physicalState === 'CONFIRMED' ? 'EXECUTED' : physicalState;
     const updatedPlan = await (this.prisma as any).actionPlan.update({
       where: { id: actionPlanId },
       data: { status: finalStatus },
@@ -89,7 +93,7 @@ export class ActionExecutorService {
     });
     await (this.prisma as any).decisionRecord.update({
       where: { id: plan.decisionId },
-      data: { status: finalStatus === 'EXECUTED' ? 'EXECUTED' : 'FAILED' }
+      data: { status: finalStatus === 'EXECUTED' ? 'EXECUTED' : finalStatus === 'FAILED' ? 'FAILED' : 'AWAITING_CONFIRMATION' }
     });
 
     await this.operationLogService.create({
@@ -121,7 +125,30 @@ export class ActionExecutorService {
     if (!tenantId) throw new ForbiddenException('Authenticated tenant context required');
     const execution = await (this.prisma as any).actionExecution.findFirst({ where: { id: executionId, actionPlan: { tenantId } } });
     if (!execution) throw new NotFoundException('Action execution not found');
-    const status = feedback.status === 'FAILED' ? 'FAILED' : feedback.status === 'SKIPPED' ? 'SKIPPED' : 'ACKED';
+    const supported = new Set(['PHYSICALLY_CONFIRMED', 'FEEDBACK_MISMATCH', 'FEEDBACK_TIMEOUT', 'OUTCOME_UNKNOWN', 'FAILED']);
+    if (!feedback.status || !supported.has(feedback.status)) throw new BadRequestException('UNSUPPORTED_FEEDBACK_STATUS');
+    const status = feedback.status;
+    const payload = feedback.payload ?? {};
+    const identity = execution.result?.identity ?? {};
+    if (payload.commandId !== execution.requestId || payload.deviceId !== execution.deviceId || payload.tenantId !== tenantId || (identity.farmId && payload.farmId !== identity.farmId)) {
+      throw new BadRequestException('FEEDBACK_IDENTITY_MISMATCH');
+    }
+    if (execution.status === 'PHYSICALLY_CONFIRMED') {
+      if (feedback.status !== 'PHYSICALLY_CONFIRMED') throw new BadRequestException('TERMINAL_FEEDBACK_CONFLICT');
+      return execution;
+    }
+    if (['FAILED', 'FEEDBACK_MISMATCH', 'FEEDBACK_TIMEOUT'].includes(execution.status)) {
+      await this.operationLogService.create({ action: 'LATE_PHYSICAL_FEEDBACK', targetType: 'ActionExecution', targetId: executionId, description: 'Late physical feedback retained without changing terminal command state', metadata: { priorStatus: execution.status, feedback } as any });
+      return execution;
+    }
+    if (status === 'PHYSICALLY_CONFIRMED') {
+      const observedAt = Date.parse(String(payload.observedAt ?? ''));
+      if (payload.physicalConfirmed !== true || !['MODBUS_TCP', 'FAKE_FEEDBACK'].includes(String(payload.source)) || !Number.isFinite(observedAt)
+        || observedAt > Date.now() + 5000 || (execution.executedAt && observedAt < new Date(execution.executedAt).getTime())
+        || payload.expectedState === undefined || payload.observedState !== payload.expectedState) {
+        throw new BadRequestException('INVALID_PHYSICAL_EVIDENCE');
+      }
+    }
     const updated = await (this.prisma as any).actionExecution.update({
       where: { id: executionId },
       data: {
@@ -133,8 +160,12 @@ export class ActionExecutorService {
         }
       }
     });
+    await (this.prisma as any).deviceCommand.updateMany({ where: { requestId: execution.requestId }, data: { status, ackAt: new Date(), errorMessage: feedback.message } });
     const plan = await (this.prisma as any).actionExecution.findUnique({ where: { id: executionId }, select: { actionPlanId: true } });
-    if (plan?.actionPlanId) await this.executionResultLinker.linkActionPlanResult(plan.actionPlanId);
+    if (plan?.actionPlanId) {
+      await this.reconcilePlan(plan.actionPlanId);
+      await this.executionResultLinker.linkActionPlanResult(plan.actionPlanId);
+    }
     return updated;
   }
 
@@ -165,30 +196,33 @@ export class ActionExecutorService {
     });
     const claimed = await (this.prisma as any).deviceCommand.updateMany({
       where: { requestId: commandId, status: 'PENDING' },
-      data: { status: 'SENT', sentAt: new Date() }
+      data: { status: 'DISPATCHING' }
     });
     if (claimed.count !== 1) {
       return (await (this.prisma as any).actionExecution.findFirst({ where: { requestId: commandId }, orderBy: { createdAt: 'desc' } }))
-        ?? { requestId: commandId, status: 'SENT', duplicate: true };
+        ?? { requestId: commandId, status: 'OUTCOME_UNKNOWN', duplicate: true };
     }
     const created = await (this.prisma as any).actionExecution.create({
-      data: { actionPlanId, deviceId, command, status: 'PENDING', requestId: commandId }
+      data: { tenantId: payload?.tenantId, actionPlanId, deviceId, command, status: 'DISPATCHING', requestId: commandId }
     });
     try {
       if (isDangerousStart(command)) {
         await this.safetyService.assertDangerousStartAllowed({ tenantId: String(payload?.tenantId ?? ''), farmId: String(payload?.farmId ?? ''), fieldId: typeof payload?.fieldId === 'string' ? payload.fieldId : undefined });
       }
       const result: any = await this.deviceControlService.send(deviceId, { command: command as SupportedCommand, payload: { ...(payload ?? {}), commandId }, controlPath: 'ACTION_QUEUE', commandId });
+      const status = resultExecutionStatus(result);
+      await (this.prisma as any).deviceCommand.updateMany({ where: { requestId: commandId }, data: { status, sentAt: new Date() } });
       return (this.prisma as any).actionExecution.update({
         where: { id: created.id },
         data: {
-          status: 'SENT',
+          status,
           requestId: commandId,
-          result,
+          result: { ...result, identity: { tenantId: payload?.tenantId, farmId: payload?.farmId, deviceId, commandId } },
           executedAt: new Date()
         }
       });
     } catch (error) {
+      await (this.prisma as any).deviceCommand.updateMany({ where: { requestId: commandId }, data: { status: 'FAILED', errorMessage: error instanceof Error ? error.message : String(error) } }).catch(() => undefined);
       return (this.prisma as any).actionExecution.update({
         where: { id: created.id },
         data: {
@@ -197,6 +231,30 @@ export class ActionExecutorService {
           executedAt: new Date()
         }
       });
+    }
+  }
+
+  async reconcileInterruptedDispatches() {
+    const interrupted = await (this.prisma as any).actionExecution.findMany({ where: { status: 'DISPATCHING' } });
+    for (const item of interrupted) {
+      await (this.prisma as any).actionExecution.update({ where: { id: item.id }, data: { status: 'OUTCOME_UNKNOWN', errorMessage: 'RESTART_DURING_DISPATCH_REQUIRES_PHYSICAL_RECONCILIATION' } });
+      if (item.requestId) await (this.prisma as any).deviceCommand.updateMany({ where: { requestId: item.requestId, status: 'DISPATCHING' }, data: { status: 'OUTCOME_UNKNOWN' } });
+    }
+    const orphanedCommands = await (this.prisma as any).deviceCommand.findMany({ where: { status: 'DISPATCHING' } });
+    for (const command of orphanedCommands) {
+      await (this.prisma as any).deviceCommand.updateMany({ where: { requestId: command.requestId, status: 'DISPATCHING' }, data: { status: 'OUTCOME_UNKNOWN', errorMessage: 'RESTART_BEFORE_DISPATCH_OUTCOME_PERSISTED' } });
+    }
+    return interrupted.length + orphanedCommands.length;
+  }
+
+  private async reconcilePlan(actionPlanId: string) {
+    const executions = await (this.prisma as any).actionExecution.findMany({ where: { actionPlanId } });
+    const state = aggregatePhysicalStatus(executions);
+    const status = state === 'CONFIRMED' ? 'EXECUTED' : state;
+    const plan = await (this.prisma as any).actionPlan.update({ where: { id: actionPlanId }, data: { status }, include: { decision: true } });
+    await (this.prisma as any).decisionRecord.update({ where: { id: plan.decisionId }, data: { status: status === 'EXECUTED' ? 'EXECUTED' : status === 'FAILED' ? 'FAILED' : 'AWAITING_CONFIRMATION' } });
+    if (status === 'EXECUTED' || status === 'FAILED') {
+      await (this.prisma as any).actionQueueJob?.updateMany?.({ where: { actionPlanId, status: 'AWAITING_CONFIRMATION' }, data: { status: status === 'EXECUTED' ? 'SUCCESS' : 'FAILED', finishedAt: new Date() } });
     }
   }
 }

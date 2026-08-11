@@ -60,7 +60,7 @@ export class HealthService {
       this.prisma.farm.count(),
       (this.prisma as any).eventLog.count(),
       (this.prisma as any).auditEvent.count({ where: { severity: { in: ['ERROR', 'CRITICAL'] } } }),
-      (this.prisma as any).deviceCommand.count({ where: { command: { in: ['OPEN', 'CLOSE', 'SET_OPENING', 'TEST_OPEN'] }, status: { in: ['PENDING', 'SENT'] } } }),
+      (this.prisma as any).deviceCommand.count({ where: { command: { in: ['OPEN', 'CLOSE', 'SET_OPENING', 'TEST_OPEN'] }, status: { in: ['PENDING', 'DISPATCHING', 'SENT', 'ACKED', 'FEEDBACK_PENDING', 'OUTCOME_UNKNOWN'] } } }),
       (this.prisma as any).deviceCommand.count({ where: { command: { in: ['OPEN', 'CLOSE', 'SET_OPENING', 'TEST_OPEN'] }, status: 'FAILED' } }),
       (this.prisma as any).deviceCommand.count({ where: { command: { in: ['OPEN', 'CLOSE', 'SET_OPENING', 'TEST_OPEN'] }, status: 'TIMEOUT' } }),
       (this.prisma as any).deviceCommand.findFirst({ where: { command: { in: ['OPEN', 'CLOSE', 'SET_OPENING', 'TEST_OPEN'] }, ackAt: { not: null } }, orderBy: { ackAt: 'desc' } })
@@ -121,7 +121,7 @@ export class HealthService {
 
   private async valveReadiness() {
     const [valvePendingCommands, valveFailedCommands, valveTimeoutCommands, valveLastAck] = await Promise.all([
-      (this.prisma as any).deviceCommand.count({ where: { command: { in: ['OPEN', 'CLOSE', 'SET_OPENING', 'TEST_OPEN'] }, status: { in: ['PENDING', 'SENT'] } } }),
+      (this.prisma as any).deviceCommand.count({ where: { command: { in: ['OPEN', 'CLOSE', 'SET_OPENING', 'TEST_OPEN'] }, status: { in: ['PENDING', 'DISPATCHING', 'SENT', 'ACKED', 'FEEDBACK_PENDING', 'OUTCOME_UNKNOWN'] } } }),
       (this.prisma as any).deviceCommand.count({ where: { command: { in: ['OPEN', 'CLOSE', 'SET_OPENING', 'TEST_OPEN'] }, status: 'FAILED' } }),
       (this.prisma as any).deviceCommand.count({ where: { command: { in: ['OPEN', 'CLOSE', 'SET_OPENING', 'TEST_OPEN'] }, status: 'TIMEOUT' } }),
       (this.prisma as any).deviceCommand.findFirst({ where: { command: { in: ['OPEN', 'CLOSE', 'SET_OPENING', 'TEST_OPEN'] }, ackAt: { not: null } }, orderBy: { ackAt: 'desc' } })

@@ -9,7 +9,7 @@ Date: 2026-08-10
 - Direct Device API, DeviceControl API, MQTT API, irrigation, advice, IoT integration, and legacy MQTT adapter calls cannot publish physical commands without ActionQueue authorization.
 - The executable chain is Safety check → approved/policy-eligible ActionPlan → ActionQueue → ActionExecutor → DeviceControlService → selected adapter.
 - Command and feedback identity includes tenant, farm, device, timestamps, expiry, parameters, and the same command ID.
-- State vocabulary includes CREATED, QUEUED, DISPATCHING, SENT, ACK_PENDING, ACKNOWLEDGED, SUCCEEDED, REJECTED, TIMEOUT, FAILED, CANCELLED, EXPIRED, and SAFETY_BLOCKED.
+- The original state vocabulary covered transport and software acknowledgement. Batch 3 adds `FEEDBACK_PENDING`, `PHYSICALLY_CONFIRMED`, `FEEDBACK_MISMATCH`, `FEEDBACK_TIMEOUT`, `FEEDBACK_UNAVAILABLE`, and `OUTCOME_UNKNOWN`; only `PHYSICALLY_CONFIRMED` represents physical completion.
 
 ## Safety and interlocks
 
@@ -27,6 +27,8 @@ Date: 2026-08-10
 ## Verification
 
 The local fake-controller suite covers 15 cases: valve open success, timeout, feedback mismatch, pump/valve interlock block and allow, duplicate command, expiry, controller offline, emergency stop, bounded retry, delayed ACK, malformed ACK, invalid HMAC, wrong tenant/farm/device ACK, and STOP priority.
+
+These fake-controller successes demonstrate software state-machine behavior, not real hardware movement. `SUCCEEDED` in the historical fake suite is test-only simulated feedback and must not be interpreted as a real PLC, pump, or valve confirmation.
 
 Existing non-Docker regression suites and dependency audit must pass before commit. Docker, production services, external brokers, databases, and real hardware are not used.
 
