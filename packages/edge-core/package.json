@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.json --noEmit"
+    "test": "npm run build && node --test dist/test/*.test.js"
   },
   "dependencies": {
     "modbus-serial": "^8.0.25"

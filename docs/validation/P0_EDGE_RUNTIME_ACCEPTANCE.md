@@ -15,6 +15,7 @@
 - REAL PLC CONNECTED = NO
 - REAL MODBUS WRITE = NO
 - REAL HARDWARE ENABLED = NO
+- MODBUS OPTION VALIDATION = PASS
 
 ## Architecture
 
@@ -36,6 +37,8 @@ The production transport supports MQTT TLS certificate paths, QoS 1, command sub
 Configuration fails closed without edge, tenant, farm, MQTT endpoint/machine credential path or storage path. Machine certificate/key/HMAC paths are separate from user authentication. Logs and evidence never output credential contents. Edge scope is limited to configured tenant, farm and devices.
 
 The default PLC transport is FAKE. The config gate, existing six environment gates and a valid approved REAL profile are all required for theoretical write eligibility. Every P0 Runtime test has real write disabled. No real broker, PLC, LOGO, Modbus write, database, Redis, Docker or production service was used.
+
+Shared `CoreModbusTcpTransport` is the single validation authority for host, port, unitId, retry, `connectTimeoutMs` and `commandTimeoutMs`. Both timeout values require an integer in the inclusive range 1–60000 ms. Invalid, zero, negative, fractional, NaN or oversized values fail closed with `INVALID_MODBUS_OPTIONS` before any connection attempt. Backend and Edge Runtime therefore receive identical validation behavior.
 
 ## Runtime E2E
 

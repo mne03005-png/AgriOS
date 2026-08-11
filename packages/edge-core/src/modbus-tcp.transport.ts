@@ -4,6 +4,20 @@ import type { PlcTransportHealth, PlcTransportPort } from './index';
 export interface ModbusTcpOptions { host: string; port: number; unitId: number; connectTimeoutMs: number; commandTimeoutMs: number; retry: number }
 export class PlcTransportError extends Error { readonly response: { errorCode: string }; constructor(code: string) { super(code); this.response = { errorCode: code }; } }
 
+export function validateModbusTcpOptions(value: ModbusTcpOptions): ModbusTcpOptions {
+  const validInteger = (candidate: number, minimum: number, maximum: number) =>
+    Number.isInteger(candidate) && candidate >= minimum && candidate <= maximum;
+  if (typeof value.host !== 'string' || value.host.trim().length === 0
+    || !validInteger(value.port, 1, 65535)
+    || !validInteger(value.unitId, 0, 255)
+    || !validInteger(value.connectTimeoutMs, 1, 60_000)
+    || !validInteger(value.commandTimeoutMs, 1, 60_000)
+    || !validInteger(value.retry, 0, 5)) {
+    throw new PlcTransportError('INVALID_MODBUS_OPTIONS');
+  }
+  return value;
+}
+
 export class CoreModbusTcpTransport implements PlcTransportPort {
   protected client = new ModbusRTU(); protected connected = false;
   constructor(private readonly optionsProvider: () => ModbusTcpOptions, private readonly writeEligible: () => boolean) {}
@@ -18,7 +32,7 @@ export class CoreModbusTcpTransport implements PlcTransportPort {
   async writeHoldingRegister(address:number,value:number){this.assertWrite();if(!Number.isInteger(value)||value<0||value>0xffff)throw new PlcTransportError('INVALID_MODBUS_REGISTER_VALUE');await this.transaction(()=>this.client.writeRegister(this.address(address),value));}
   async transaction<T>(operation:()=>Promise<T>):Promise<T>{const options=this.options();let last:unknown;for(let attempt=0;attempt<=options.retry;attempt++){try{if(!this.connected||!this.client.isOpen)await this.connect();return await this.withTimeout(operation(),options.commandTimeoutMs,'MODBUS_COMMAND_TIMEOUT');}catch(error){last=error;this.connected=false;if(attempt<options.retry){try{await this.disconnect();}catch{}this.client=new ModbusRTU();}}}throw last instanceof Error?last:new PlcTransportError('MODBUS_TRANSACTION_FAILED');}
   private assertWrite(){if(!this.writeEligible())throw new PlcTransportError('PLC_REAL_WRITE_DISABLED');}
-  private options(){const value=this.optionsProvider();if(!value.host||!Number.isInteger(value.port)||value.port<1||value.port>65535||!Number.isInteger(value.unitId)||value.unitId<0||value.unitId>255||!Number.isInteger(value.retry)||value.retry<0||value.retry>5)throw new PlcTransportError('INVALID_MODBUS_OPTIONS');return value;}
+  private options(){return validateModbusTcpOptions(this.optionsProvider());}
   private address(value:number){if(!Number.isInteger(value)||value<0||value>0xffff)throw new PlcTransportError('INVALID_MODBUS_ADDRESS');return value;}
   private async withTimeout<T>(operation:Promise<T>,timeoutMs:number,code:string){let timer:NodeJS.Timeout|undefined;try{return await Promise.race([operation,new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new PlcTransportError(code)),timeoutMs);})]);}finally{if(timer)clearTimeout(timer);}}
 }
