@@ -27,6 +27,7 @@ export interface EdgeCommandRecord {
   tenantId: string;
   farmId: string;
   action: string;
+  resetOfCommandId?: string;
   expiresAt: string;
   receivedAt: string;
   executedAt?: string;

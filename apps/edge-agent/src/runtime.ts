@@ -1,5 +1,5 @@
 import { appendFile, readFile } from 'node:fs/promises';
-import { ControlCommandArbiter, EdgeReliabilityAgent, PersistentEdgeStore, PlcTransportPort } from '@agrios/edge-core';
+import { activeEmergencyIdentity, ControlCommandArbiter, EdgeReliabilityAgent, PersistentEdgeStore, PlcTransportPort } from '@agrios/edge-core';
 import { CommandAuthenticator } from './authenticator';
 import { EdgeConfig, realWriteEligible } from './config';
 import { EdgeDeviceControl, FakePlcTransport } from './device-control';
@@ -18,9 +18,8 @@ export class EdgeRuntime {
   }
   async start(inputPath?: string, runOnce = false) {
     await this.store.open(); this.authenticator = await CommandAuthenticator.fromKeyFile(this.config.mqtt.hmacKeyPath);
-    const recorded = this.store.snapshot().commands;
-    const lastSafety = [...recorded].reverse().find((item) => item.action === 'EMERGENCY_STOP' || item.action === 'RESET_EMERGENCY_STOP');
-    this.commandArbiter.restoreEmergencyLatch(lastSafety?.action === 'EMERGENCY_STOP');
+    const activeEmergencyCommandId = activeEmergencyIdentity(this.store.snapshot().commands);
+    this.commandArbiter.restoreEmergencyLatch(activeEmergencyCommandId);
     this.mqtt.onCommand(async (payload) => this.handleCommand(JSON.parse(payload)));
     await this.connectSafely();
     if (inputPath) await this.processInput(inputPath);
@@ -34,7 +33,10 @@ export class EdgeRuntime {
     if (!this.accepting) return;
     const signatureValid = this.authenticator?.verify(data) === true;
     try {
-      const result = await this.commandArbiter.submit(String(data.action ?? ''), (dispatchAllowed) => this.agent.receiveCommand({ commandId: String(data.commandId ?? ''), edgeId: String(data.edgeId ?? ''), deviceId: String(data.deviceId ?? ''), tenantId: String(data.tenantId ?? ''), farmId: String(data.farmId ?? ''), action: String(data.action ?? ''), expiresAt: String(data.expiresAt ?? ''), signatureValid }, () => dispatchAllowed ? this.control.execute({ commandId: data.commandId, action: data.action }) : Promise.resolve({ status: data.action === 'EMERGENCY_STOP' ? 'ALREADY_LATCHED' : 'SAFETY_BLOCKED', executed: false, errorCode: 'EMERGENCY_STOP_ACTIVE_OR_STALE_START' })));
+      const command = { commandId: String(data.commandId ?? ''), edgeId: String(data.edgeId ?? ''), deviceId: String(data.deviceId ?? ''), tenantId: String(data.tenantId ?? ''), farmId: String(data.farmId ?? ''), action: String(data.action ?? ''), expiresAt: String(data.expiresAt ?? ''), resetOfCommandId: typeof data.resetOfCommandId === 'string' ? data.resetOfCommandId : undefined, signatureValid };
+      const existing = this.agent.validateCommand(command);
+      if (existing) { await this.outcome({ commandId: data.commandId, outcome: 'DUPLICATE' }); return; }
+      const result = await this.commandArbiter.submit({ action: command.action, commandId: command.commandId, resetOfCommandId: command.resetOfCommandId }, (dispatchAllowed) => this.agent.receiveCommand(command, () => dispatchAllowed ? this.control.execute({ commandId: data.commandId, action: data.action }) : Promise.resolve({ status: data.action === 'EMERGENCY_STOP' ? 'ALREADY_LATCHED' : 'SAFETY_BLOCKED', executed: false, errorCode: 'EMERGENCY_STOP_ACTIVE_OR_STALE_START' })));
       await this.outcome({ commandId: data.commandId, outcome: result.duplicate ? 'DUPLICATE' : result.record.ackStatus === 'EXPIRED' ? 'EXPIRED' : 'ACCEPTED' });
     } catch (error) { await this.outcome({ commandId: data.commandId, outcome: 'REJECTED', reason: error instanceof Error ? error.message : String(error) }); }
   }

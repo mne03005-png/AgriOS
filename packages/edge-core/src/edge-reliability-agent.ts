@@ -26,9 +26,18 @@ export class EdgeReliabilityAgent {
     this.updatePeak(); this.lastSeen = item.edgeReceivedAt; return result;
   }
 
-  async receiveCommand(input: { commandId: string; edgeId: string; deviceId: string; tenantId: string; farmId: string; action: string; expiresAt: string; signatureValid: boolean }, execute: () => Promise<Record<string, unknown>>) {
-    this.assertScope(input); if (!input.signatureValid) throw new Error('EDGE_COMMAND_INVALID_HMAC');
-    const existing = this.store.command(input.commandId); if (existing) return { duplicate: true, record: existing };
+  validateCommand(input: { commandId: string; edgeId: string; deviceId: string; tenantId: string; farmId: string; action: string; expiresAt: string; signatureValid: boolean; resetOfCommandId?: string }) {
+    if (!input.signatureValid) throw new Error('EDGE_COMMAND_INVALID_HMAC');
+    this.assertScope(input);
+    if (!input.commandId.trim()) throw new Error('EDGE_COMMAND_ID_REQUIRED');
+    const expiresAt = Date.parse(input.expiresAt);
+    if (!Number.isFinite(expiresAt)) throw new Error('EDGE_COMMAND_EXPIRY_INVALID');
+    if (['EMERGENCY_STOP', 'RESET_EMERGENCY_STOP'].includes(input.action) && expiresAt <= Date.now()) throw new Error('EDGE_SAFETY_COMMAND_EXPIRED');
+    return this.store.command(input.commandId);
+  }
+
+  async receiveCommand(input: { commandId: string; edgeId: string; deviceId: string; tenantId: string; farmId: string; action: string; expiresAt: string; signatureValid: boolean; resetOfCommandId?: string }, execute: () => Promise<Record<string, unknown>>) {
+    const existing = this.validateCommand(input); if (existing) return { duplicate: true, record: existing };
     const dangerous = ['PUMP_ON', 'VALVE_OPEN', 'IRRIGATION_START'].includes(input.action);
     const expired = Date.parse(input.expiresAt) <= Date.now();
     const record: EdgeCommandRecord = { ...input, receivedAt: new Date().toISOString(), ackStatus: expired && dangerous ? 'EXPIRED' : 'PENDING' };

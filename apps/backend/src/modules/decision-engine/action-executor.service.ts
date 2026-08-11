@@ -69,9 +69,6 @@ export class ActionExecutorService {
     const executions = [];
     for (const action of actions) {
       if (action.type !== 'DEVICE_COMMAND' || !action.deviceId || !action.command) continue;
-      if (isDangerousStart(action.command)) {
-        await this.safetyService.assertDangerousStartAllowed({ tenantId: plan.tenantId, farmId: action.farmId ?? plan.decision?.farmId, fieldId: action.fieldId ?? plan.fieldId });
-      }
       const execution = await this.executeDeviceCommand(actionPlanId, action.deviceId, action.command, {
         ...(action.payload ?? {}),
         tenantId: plan.tenantId,
@@ -178,6 +175,9 @@ export class ActionExecutorService {
       data: { actionPlanId, deviceId, command, status: 'PENDING', requestId: commandId }
     });
     try {
+      if (isDangerousStart(command)) {
+        await this.safetyService.assertDangerousStartAllowed({ tenantId: String(payload?.tenantId ?? ''), farmId: String(payload?.farmId ?? ''), fieldId: typeof payload?.fieldId === 'string' ? payload.fieldId : undefined });
+      }
       const result: any = await this.deviceControlService.send(deviceId, { command: command as SupportedCommand, payload: { ...(payload ?? {}), commandId }, controlPath: 'ACTION_QUEUE', commandId });
       return (this.prisma as any).actionExecution.update({
         where: { id: created.id },

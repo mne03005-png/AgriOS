@@ -19,10 +19,11 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
   constructor(private readonly config: ConfigService, @Optional() private readonly modbusTransport?: ModbusTcpTransport) {}
 
   async execute(command: PlcControlCommand): Promise<PlcCommandResult> {
+    const invalidEnvelope = this.validateEnvelope(command);
+    if (invalidEnvelope) return this.rejected(command, 'REJECTED', invalidEnvelope);
     const previous = this.results.get(command.commandId);
     if (previous) return previous;
     if (Date.parse(command.expiresAt) <= Date.now()) return this.remember(command, this.rejected(command, 'EXPIRED', 'COMMAND_EXPIRED'));
-    if (!command.commandId || command.commandId !== command.idempotencyKey) return this.remember(command, this.rejected(command, 'REJECTED', 'INVALID_IDEMPOTENCY_KEY'));
     if (!this.realExecutionEnabled()) return this.remember(command, this.rejected(command, 'SAFETY_BLOCKED', 'REAL_CONTROL_DISABLED'));
     if (!this.profileConfigured()) return this.remember(command, this.rejected(command, 'REJECTED', 'PLC_PROFILE_UNCONFIGURED'));
     if (!this.status.online) return this.remember(command, this.rejected(command, 'REJECTED', 'CONTROLLER_OFFLINE'));
@@ -103,12 +104,24 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
 
   private fromLegacy(deviceId: string, action: PlcControlCommand['action'], payload?: DeviceControlPayload) {
     const value = (payload ?? {}) as Record<string, unknown>;
-    if (value.controlPath !== 'ACTION_QUEUE' || typeof value.commandId !== 'string') return this.unsupported(deviceId, action, payload, 'ACTION_QUEUE_PATH_REQUIRED');
+    if (!['ACTION_QUEUE', 'SAFETY_DISPATCH'].includes(String(value.controlPath)) || typeof value.commandId !== 'string') return this.unsupported(deviceId, action, payload, 'AUTHORIZED_CONTROL_PATH_REQUIRED');
     return this.execute({
       commandId: value.commandId, idempotencyKey: String(value.idempotencyKey ?? value.commandId), tenantId: String(value.tenantId ?? ''),
       farmId: String(value.farmId ?? ''), fieldId: value.fieldId as string | undefined, zoneId: value.zoneId as string | undefined,
-      deviceId, action, requestedAt: String(value.requestedAt ?? new Date().toISOString()), expiresAt: String(value.expiresAt ?? ''), parameters: value
+      deviceId, action, requestedAt: String(value.requestedAt ?? ''), expiresAt: String(value.expiresAt ?? ''), parameters: value
     });
+  }
+
+  private validateEnvelope(command: PlcControlCommand) {
+    if (!command.commandId.trim() || command.commandId !== command.idempotencyKey) return 'INVALID_IDEMPOTENCY_KEY';
+    if (!command.tenantId.trim()) return 'TENANT_ID_REQUIRED';
+    if (!command.farmId.trim()) return 'FARM_ID_REQUIRED';
+    if (!command.deviceId.trim()) return 'DEVICE_ID_REQUIRED';
+    const requestedAt = Date.parse(command.requestedAt); const expiresAt = Date.parse(command.expiresAt);
+    if (!Number.isFinite(requestedAt)) return 'REQUESTED_AT_INVALID';
+    if (!Number.isFinite(expiresAt)) return 'EXPIRES_AT_INVALID';
+    if (expiresAt > Date.now() && expiresAt <= requestedAt) return 'EXPIRY_WINDOW_INVALID';
+    return undefined;
   }
 
   private realExecutionEnabled() {

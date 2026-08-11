@@ -102,7 +102,9 @@ export class SafetyService {
     const results: Array<{ deviceId: string; ok: boolean; result?: unknown; error?: string }> = [];
     for (const target of targets) {
       try {
-        const result = await this.deviceControl.send(target.id, { command: 'EMERGENCY_STOP', controlPath: 'ACTION_QUEUE', commandId: `emergency-stop:${latch.id}:${target.id}` });
+        const commandId = `emergency-stop:${latch.id}:${target.id}`;
+        const requestedAt = new Date();
+        const result = await this.deviceControl.send(target.id, { command: 'EMERGENCY_STOP', controlPath: 'SAFETY_DISPATCH', commandId, payload: { tenantId, farmId: input.farmId, fieldId: input.fieldId, deviceId: target.id, commandId, idempotencyKey: commandId, requestedAt: requestedAt.toISOString(), expiresAt: new Date(requestedAt.getTime() + 30_000).toISOString() } });
         results.push({ deviceId: target.id, ok: this.dispatchSucceeded(result), result });
       } catch (error) {
         results.push({ deviceId: target.id, ok: false, error: error instanceof Error ? error.message : String(error) });

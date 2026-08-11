@@ -21,6 +21,7 @@
 - Production dependency audit: 0 vulnerabilities
 - P0 Safety Closure Batch 1: COMPLETE
 - P0 Safety Closure Batch 2: COMPLETE
+- P0 Safety Closure Batch 2.1 final safety dispatch correction: COMPLETE
 - Auth coverage for platform and physical-control entry points: HARDENED
 - Tenant, approval and action-plan isolation: HARDENED
 - Unsafe client `force` safety bypass: REMOVED

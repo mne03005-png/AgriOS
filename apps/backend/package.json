@@ -29,6 +29,7 @@
     "test:p0-edge-reliability": "ts-node scripts/verify-p0-edge-reliability.ts"
     ,"test:p0-auth-control-entry": "ts-node scripts/verify-p0-auth-control-entry.ts"
     ,"test:p0-emergency-stop-priority": "ts-node scripts/verify-p0-emergency-stop-priority.ts"
+    ,"test:p0-safety-dispatch-closure": "ts-node scripts/verify-p0-safety-dispatch-closure.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

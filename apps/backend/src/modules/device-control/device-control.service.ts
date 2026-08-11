@@ -12,11 +12,13 @@ import { EdgeHttpDeviceController } from './adapters/edge-http-device-controller
 import { PlcGatewayDeviceController } from './adapters/plc-gateway-device-controller';
 import { BluetoothLocalDeviceController } from './adapters/bluetooth-local-device-controller';
 import { DeviceControlMode, normalizeDeviceControlMode } from './device-control-mode';
+import { PriorityCommandSerializer, isStopAction } from '@agrios/edge-core';
 
 type AdapterAlias = 'mock' | 'mqtt' | 'thingsboard' | 'edge' | 'plc' | 'bluetooth';
 
 @Injectable()
 export class DeviceControlService {
+  private readonly serializer = new PriorityCommandSerializer();
   constructor(
     private readonly mockController: MockDeviceController,
     private readonly mqttController: MqttDeviceController,
@@ -31,8 +33,11 @@ export class DeviceControlService {
     private readonly audit: AuditService
   ) {}
 
-  async send(deviceId: string, dto: DeviceControlCommandDto & { adapter?: AdapterAlias | DeviceControlMode; controlPath?: 'ACTION_QUEUE'; commandId?: string }) {
+  async send(deviceId: string, dto: DeviceControlCommandDto & { adapter?: AdapterAlias | DeviceControlMode; controlPath?: 'ACTION_QUEUE' | 'SAFETY_DISPATCH'; commandId?: string }) {
     this.validatePayload(dto);
+    if (dto.controlPath === 'SAFETY_DISPATCH' && !isStopAction(dto.command)) {
+      throw new BadRequestException('SAFETY_DISPATCH only accepts risk-reducing STOP commands');
+    }
     const mode = this.resolveMode(dto.adapter);
     if (this.isReadOnlyControlMode(mode)) {
       const result = {
@@ -46,12 +51,12 @@ export class DeviceControlService {
       await this.recordAttempt(deviceId, dto.command, mode, result);
       return result;
     }
-    if (dto.controlPath !== 'ACTION_QUEUE' || !dto.commandId) {
+    if (!['ACTION_QUEUE', 'SAFETY_DISPATCH'].includes(String(dto.controlPath)) || !dto.commandId) {
       throw new BadRequestException('Physical commands must enter through Safety, Approval, ActionPlan and ActionQueue');
     }
     const controller = this.controllerForMode(mode);
     const payload = { remark: dto.remark, ...(dto.payload ?? {}), controlPath: dto.controlPath, commandId: dto.commandId, idempotencyKey: dto.commandId };
-    const result = await this.dispatch(controller, deviceId, dto.command, payload);
+    const result = await this.serializer.submit(dto.command, () => this.dispatch(controller, deviceId, dto.command, payload));
     await this.recordAttempt(deviceId, dto.command, mode, result);
     this.eventBus.publish('device.command.sent', { deviceId, command: dto.command, mode, result });
     return result;
