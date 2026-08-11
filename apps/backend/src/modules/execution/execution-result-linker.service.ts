@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EventBusService } from '../event-bus/event-bus.service';
 import { aggregatePhysicalStatus } from './physical-confirmation';
@@ -217,14 +219,35 @@ export class ExecutionResultLinkerService {
 
   private async recordUsageOnce(tenantId: string | null | undefined, farmId: string, fieldId: string | null | undefined, usageType: string, refId: string, refType: string, deviceId?: string) {
     if (!tenantId) return { record: null, created: false };
-    const existing = await (this.prisma as any).usageRecord.findFirst({
-      where: { tenantId, usageType, metadata: { path: ['refId'], equals: refId } as any }
-    }).catch(() => null);
+    const semanticWhere = {
+      tenantId,
+      usageType,
+      AND: [
+        { metadata: { path: ['refType'], equals: refType } as any },
+        { metadata: { path: ['refId'], equals: refId } as any }
+      ]
+    };
+    const existing = await (this.prisma as any).usageRecord.findFirst({ where: semanticWhere });
     if (existing) return { record: existing, created: false };
-    const record = await (this.prisma as any).usageRecord.create({
-      data: { tenantId, farmId, fieldId, deviceId, usageType, quantity: 1, unit: 'execution', costAmount: 0, metadata: { refType, refId } }
-    });
-    return { record, created: true };
+    const id = this.deterministicUsageId(tenantId, usageType, refType, refId);
+    try {
+      const record = await (this.prisma as any).usageRecord.create({
+        data: { id, tenantId, farmId, fieldId, deviceId, usageType, quantity: 1, unit: 'execution', costAmount: 0, metadata: { refType, refId } }
+      });
+      return { record, created: true };
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') throw error;
+      const winner = await (this.prisma as any).usageRecord.findFirst({ where: semanticWhere });
+      if (!winner) throw error;
+      return { record: winner, created: false };
+    }
+  }
+
+  private deterministicUsageId(tenantId: string, usageType: string, refType: string, refId: string) {
+    const digest = createHash('sha256')
+      .update(['agrios-usage-v1', tenantId, usageType, refType, refId].join('|'))
+      .digest('hex');
+    return `usage-${digest}`;
   }
 
   private sumDurationMinutes(actions: any[]) {

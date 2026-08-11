@@ -34,6 +34,7 @@
     ,"test:mysql-migrations": "prisma migrate deploy && node scripts/verify-mysql-migrations.mjs"
     ,"test:r1b-control-entry": "ts-node scripts/verify-r1b-control-entry-convergence.ts"
     ,"test:r1b1-lifecycle": "ts-node scripts/verify-r1b1-physical-business-lifecycle.ts"
+    ,"test:r1b2-concurrency": "ts-node scripts/verify-r1b2-concurrent-completion.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

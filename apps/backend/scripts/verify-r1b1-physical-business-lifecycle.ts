@@ -25,7 +25,7 @@ function lifecycleFixture(status = 'PHYSICALLY_CONFIRMED') {
     irrigationRotationRun: { findFirst: async () => null },
     fertigationTask: { findFirst: async () => null },
     usageRecord: {
-      findFirst: async ({ where }: any) => usages.find((item) => item.tenantId === where.tenantId && item.usageType === where.usageType && item.metadata.refId === where.metadata.equals) ?? null,
+      findFirst: async ({ where }: any) => { const metadata = Object.fromEntries((where.AND ?? []).map((item: any) => [item.metadata.path[0], item.metadata.equals])); return usages.find((item) => item.tenantId === where.tenantId && item.usageType === where.usageType && item.metadata.refType === metadata.refType && item.metadata.refId === metadata.refId) ?? null; },
       create: async ({ data }: any) => { const value = { id: `usage-${usages.length + 1}`, ...data }; usages.push(value); return value; }
     }
   };
@@ -50,7 +50,7 @@ test('6 physical confirmation creates exactly one DEVICE_EXECUTION usage', async
 test('7 action.executed is published only after physical success', async () => { const f = lifecycleFixture(); await f.linker.linkActionPlanResult(f.plan.id); assert.deepEqual(f.events.map((item) => item.name), ['action.executed']); assert.equal(f.events[0].payload.physicalConfirmed, true); });
 test('8 repeated linker invocation does not duplicate usage', async () => { const f = lifecycleFixture(); await f.linker.linkActionPlanResult(f.plan.id); await f.linker.linkActionPlanResult(f.plan.id); assert.equal(f.usages.length, 1); });
 test('9 repeated linker invocation does not duplicate completion event', async () => { const f = lifecycleFixture(); await f.linker.linkActionPlanResult(f.plan.id); await f.linker.linkActionPlanResult(f.plan.id); assert.equal(f.events.filter((item) => item.name === 'action.executed').length, 1); });
-test('10 usage preserves tenant resource and stable ActionPlan reference', async () => { const f = lifecycleFixture(); await f.linker.linkActionPlanResult(f.plan.id); assert.deepEqual(f.usages[0], { id: 'usage-1', tenantId: 'tenant-a', farmId: 'farm-a', fieldId: 'field-a', deviceId: 'pump-a', usageType: 'DEVICE_EXECUTION', quantity: 1, unit: 'execution', costAmount: 0, metadata: { refType: 'ActionPlan', refId: 'plan-execution-a' } }); });
+test('10 usage preserves tenant resource and stable ActionPlan reference', async () => { const f = lifecycleFixture(); await f.linker.linkActionPlanResult(f.plan.id); assert.match(f.usages[0].id, /^usage-[a-f0-9]{64}$/); assert.deepEqual({ ...f.usages[0], id: undefined }, { id: undefined, tenantId: 'tenant-a', farmId: 'farm-a', fieldId: 'field-a', deviceId: 'pump-a', usageType: 'DEVICE_EXECUTION', quantity: 1, unit: 'execution', costAmount: 0, metadata: { refType: 'ActionPlan', refId: 'plan-execution-a' } }); });
 
 function queueFixture(planTenant = 'tenant-a') {
   const ctx = new RequestContextService();
