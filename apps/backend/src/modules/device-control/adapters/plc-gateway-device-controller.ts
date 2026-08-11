@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { DeviceControlPayload } from '../device-controller.interface';
 import { PlcCommandResult, PlcControlCommand, PlcControllerPort, PlcFeedback, PlcStatus } from '../plc-control.types';
 import { ModbusTcpTransport } from '../transports/modbus-tcp.transport';
-import { canonicalPlcLogicalName, expectedFeedbackLogicalName, findPlcMappingByLogicalName, isReadCapableMapping, isSupportedFeedbackMapping, isWriteCapableMapping } from '@agrios/edge-core';
+import { canonicalPlcLogicalName, evaluatePlcInterlock, expectedFeedbackLogicalName, findPlcMappingByLogicalName, isReadCapableMapping, isRealPlcWriteEnabled, isSupportedFeedbackMapping, isWriteCapableMapping } from '@agrios/edge-core';
 
 type PlcProfile = {
   testOnly?: boolean;
@@ -34,15 +34,8 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
     const status = await this.readStatus(command.deviceId);
     if (!status.online) return this.remember(command, this.rejected(command, 'REJECTED', status.errorCode ?? 'CONTROLLER_OFFLINE'));
     if (this.requiresFreshStatus(command.action) && !status.fresh) return this.remember(command, this.rejected(command, 'SAFETY_BLOCKED', 'STALE_PLC_STATUS'));
-    if (command.action === 'PUMP_ON' && (status.emergencyStop || status.noWater || status.overloadTrip || !status.valveOpen)) {
-      return this.remember(command, this.rejected(command, 'SAFETY_BLOCKED', 'PUMP_INTERLOCK_BLOCKED'));
-    }
-    if (command.action === 'VALVE_OPEN' && this.status.emergencyStop) {
-      return this.remember(command, this.rejected(command, 'SAFETY_BLOCKED', 'EMERGENCY_STOP_ACTIVE'));
-    }
-    if (command.action === 'VALVE_CLOSE' && this.status.pumpRunning) {
-      return this.remember(command, this.rejected(command, 'SAFETY_BLOCKED', 'STOP_PUMP_BEFORE_VALVE_CLOSE'));
-    }
+    const interlock = evaluatePlcInterlock(command.action, status);
+    if (!interlock.allowed) return this.remember(command, this.rejected(command, 'SAFETY_BLOCKED', interlock.errorCode));
     if (this.config.get<string>('NODE_ENV') === 'test' && this.config.get<string>('PLC_GATEWAY_FAKE_TRANSPORT') === 'true') {
       this.executionCounts.set(command.commandId, (this.executionCounts.get(command.commandId) ?? 0) + 1);
       if (command.parameters.simulate === 'timeout') return this.remember(command, this.rejected(command, 'TIMEOUT', 'ACK_TIMEOUT'));
@@ -159,10 +152,12 @@ export class PlcGatewayDeviceController implements PlcControllerPort {
   }
 
   private realExecutionEnabled() {
-    return this.config.get<string>('DEVICE_CONTROL_MODE') === 'PLC_GATEWAY'
-      && this.config.get<string>('DEVICE_CONTROL_DRY_RUN') === 'false'
-      && this.config.get<string>('VALVE_ALLOW_REAL_CONTROL') === 'true'
-      && this.config.get<string>('ENABLE_AUTO_EXECUTION') === 'true';
+    const fakeTest = this.config.get<string>('NODE_ENV') === 'test' && this.config.get<string>('PLC_GATEWAY_FAKE_TRANSPORT') === 'true';
+    return fakeTest || isRealPlcWriteEnabled({
+      deviceControlMode: this.config.get<string>('DEVICE_CONTROL_MODE'), deviceControlDryRun: this.config.get<string>('DEVICE_CONTROL_DRY_RUN'),
+      valveAllowRealControl: this.config.get<string>('VALVE_ALLOW_REAL_CONTROL'), enableAutoExecution: this.config.get<string>('ENABLE_AUTO_EXECUTION'),
+      plcTransport: this.config.get<string>('PLC_TRANSPORT'), plcRealWriteEnabled: this.config.get<string>('PLC_REAL_WRITE_ENABLED')
+    });
   }
   private profileConfigured() {
     const profile = this.config.get<PlcProfile>('PLC_PROFILE');

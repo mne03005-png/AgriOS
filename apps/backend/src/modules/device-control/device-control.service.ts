@@ -12,7 +12,7 @@ import { EdgeHttpDeviceController } from './adapters/edge-http-device-controller
 import { PlcGatewayDeviceController } from './adapters/plc-gateway-device-controller';
 import { BluetoothLocalDeviceController } from './adapters/bluetooth-local-device-controller';
 import { DeviceControlMode, normalizeDeviceControlMode } from './device-control-mode';
-import { PriorityCommandSerializer, isStopAction } from '@agrios/edge-core';
+import { isRealPlcWriteEnabled, PriorityCommandSerializer, isStopAction } from '@agrios/edge-core';
 
 type AdapterAlias = 'mock' | 'mqtt' | 'thingsboard' | 'edge' | 'plc' | 'bluetooth';
 
@@ -127,6 +127,11 @@ export class DeviceControlService {
   }
 
   private isReadOnlyControlMode(mode: DeviceControlMode) {
+    if (mode === 'PLC_GATEWAY') return !isRealPlcWriteEnabled({
+      deviceControlMode: this.config.get<string>('DEVICE_CONTROL_MODE'), deviceControlDryRun: this.config.get<string>('DEVICE_CONTROL_DRY_RUN'),
+      valveAllowRealControl: this.config.get<string>('VALVE_ALLOW_REAL_CONTROL'), enableAutoExecution: this.config.get<string>('ENABLE_AUTO_EXECUTION'),
+      plcTransport: this.config.get<string>('PLC_TRANSPORT'), plcRealWriteEnabled: this.config.get<string>('PLC_REAL_WRITE_ENABLED')
+    });
     const dryRun = (this.config.get<string>('DEVICE_CONTROL_DRY_RUN') ?? 'true').toLowerCase() === 'true';
     const allowRealValve = (this.config.get<string>('VALVE_ALLOW_REAL_CONTROL') ?? 'false').toLowerCase() === 'true';
     const autoExecution = (this.config.get<string>('ENABLE_AUTO_EXECUTION') ?? 'false').toLowerCase() === 'true';

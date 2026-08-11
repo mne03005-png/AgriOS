@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { isSafetyDryRunEnabled } from '@agrios/edge-core';
 import { createHash } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import mqtt, { MqttClient } from 'mqtt';
@@ -23,7 +24,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     const configuredBrokerUrl = this.configService.get<string>('MQTT_BROKER_URL');
     const deviceControlMode = this.configService.get<string>('DEVICE_CONTROL_MODE') ?? 'MOCK';
-    const dryRun = this.booleanConfig('DEVICE_CONTROL_DRY_RUN', true);
+    const dryRun = isSafetyDryRunEnabled(this.configService.get<string>('DEVICE_CONTROL_DRY_RUN'));
 
     const shouldConnect = deviceControlMode === 'MQTT_DIRECT' && !dryRun;
 
@@ -207,9 +208,4 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private booleanConfig(key: string, fallback: boolean) {
-    const value = this.configService.get<string>(key);
-    if (value === undefined || value === null || value === '') return fallback;
-    return ['true', '1', 'yes', 'on'].includes(String(value).toLowerCase());
-  }
 }

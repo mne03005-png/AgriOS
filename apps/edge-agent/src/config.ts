@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { isRealPlcWriteEnabled, realPlcWriteGateFromEnv } from '@agrios/edge-core';
 
 export interface EdgeConfig {
   edgeId: string; tenantId: string; farmId: string; allowedDeviceIds: string[]; softwareVersion: string; configVersion: string;
@@ -34,8 +35,7 @@ export async function loadConfig(path: string): Promise<EdgeConfig> {
 
 export function realWriteEligible(config: EdgeConfig, env: NodeJS.ProcessEnv = process.env) {
   return config.safety.realWriteEnabled && config.plc.transport === 'MODBUS_TCP' && config.plc.realProfileApproved === true && Boolean(config.plc.profilePath)
-    && env.DEVICE_CONTROL_MODE === 'PLC_GATEWAY' && env.DEVICE_CONTROL_DRY_RUN === 'false' && env.VALVE_ALLOW_REAL_CONTROL === 'true'
-    && env.ENABLE_AUTO_EXECUTION === 'true' && env.PLC_TRANSPORT === 'MODBUS_TCP' && env.PLC_REAL_WRITE_ENABLED === 'true';
+    && isRealPlcWriteEnabled(realPlcWriteGateFromEnv(env));
 }
 const text = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
 const optional = (value: unknown) => text(value) ? value : undefined;

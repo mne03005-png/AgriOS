@@ -5,6 +5,7 @@ export * from './modbus-tcp.transport';
 export * from './control-priority';
 export * from './control-command-arbiter';
 export * from './plc-profile-semantics';
+export * from './plc-safety-rules';
 
 export const AGRIOS_MQTT_TOPICS = {
   telemetry: (deviceId: string) => `agrios/device/${deviceId}/telemetry`,

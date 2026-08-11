@@ -1,4 +1,4 @@
-import { findPlcMappingByLogicalName, PlcTransportPort } from '@agrios/edge-core';
+import { evaluatePlcInterlock, findPlcMappingByLogicalName, PlcTransportPort } from '@agrios/edge-core';
 import { EdgeConfig, realWriteEligible } from './config';
 
 export class FakePlcTransport implements PlcTransportPort {
@@ -25,8 +25,11 @@ export class EdgeDeviceControl {
     if (!output || !expected) return { status: 'FEEDBACK_UNAVAILABLE', accepted: false, executed: false, physicalConfirmed: false, errorCode: 'EDGE_PROFILE_MAPPING_UNAVAILABLE' };
     const safety = await this.readSafetyStatus();
     if (!safety.ok) return { status: 'FEEDBACK_UNAVAILABLE', accepted: false, executed: false, physicalConfirmed: false, errorCode: safety.errorCode };
-    if (command.action === 'PUMP_ON' && (safety.emergencyStop || safety.noWater || safety.overloadTrip || !safety.valveOpen)) return { status: 'SAFETY_BLOCKED', accepted: false, executed: false, physicalConfirmed: false, errorCode: 'PUMP_INTERLOCK_BLOCKED' };
-    if (command.action === 'VALVE_CLOSE' && safety.pumpRunning) return { status: 'SAFETY_BLOCKED', accepted: false, executed: false, physicalConfirmed: false, errorCode: 'STOP_PUMP_BEFORE_VALVE_CLOSE' };
+    const interlock = evaluatePlcInterlock(command.action, {
+      emergencyStop: safety.emergencyStop!, noWater: safety.noWater!, overloadTrip: safety.overloadTrip!,
+      pumpRunning: safety.pumpRunning!, valveOpen: safety.valveOpen!
+    });
+    if (!interlock.allowed) return { status: 'SAFETY_BLOCKED', accepted: false, executed: false, physicalConfirmed: false, errorCode: interlock.errorCode };
     await this.recordExecution(command.commandId, command.action);
     await this.transport.writeCoil(output.address, true);
     const startedAt = new Date().toISOString(); const deadline = Date.now() + this.config.safety.feedbackTimeoutMs;
