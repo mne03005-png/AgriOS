@@ -1,27 +1,27 @@
 <template>
   <section class="page">
     <DemoHeader />
-    <div v-if="isMock" class="mock-banner">Current operations are mock fallback.</div>
+    <div v-if="isMock" class="mock-banner">当前为模拟数据。</div>
     <header class="section-header">
-      <h1>Operations</h1>
+      <h1>作业</h1>
       <ExecutionModeSwitch mode="ASSISTED" />
     </header>
     <section v-if="!hasOperations || !demoReady" class="panel">
-      <div class="panel-title">Operations data not ready</div>
+      <div class="panel-title">作业数据尚未就绪</div>
       <p class="warning-text">请先执行 npx prisma db seed，生成轮灌、水肥、无人机等 Demo 作业。</p>
       <RouterLink class="ghost-button link-button" to="/demo-status">查看 Demo 状态</RouterLink>
     </section>
     <section v-for="group in groups" :key="group.key" class="operation-group">
       <div class="section-header compact">
         <h2>{{ group.title }}</h2>
-        <span class="subtle">{{ group.items.length }} records</span>
+        <span class="subtle">{{ group.items.length }} 条记录</span>
       </div>
       <article v-for="item in group.items" :key="item.id" class="panel">
         <div class="card-topline">
-          <strong>{{ item.name ?? item.id ?? item.decision?.recommendation ?? 'Operation' }}</strong>
+          <strong>{{ item.name ?? item.id ?? item.decision?.recommendation ?? '作业' }}</strong>
           <StatusBadge :label="item.status ?? 'UNKNOWN'" tone="muted" />
         </div>
-        <p class="subtle">{{ item.operationType ?? item.command ?? item.type ?? 'backend controlled operation' }}</p>
+        <p class="subtle">{{ item.operationType ?? item.command ?? item.type ?? '后端控制作业' }}</p>
       </article>
     </section>
   </section>
@@ -41,15 +41,15 @@ const isMock = ref(true);
 const demoReady = ref(true);
 
 const groups = computed(() => [
-  { key: 'actionPlans', title: 'Action plans', items: asList(operations.value.actionPlans) },
-  { key: 'rotationRuns', title: 'Rotation runs', items: asList(operations.value.rotationRuns) },
-  { key: 'fertigationTasks', title: 'Fertigation tasks', items: asList(operations.value.fertigationTasks) },
-  { key: 'dissolveTasks', title: 'Dissolve fertilizer tasks', items: asList(operations.value.dissolveTasks ?? operations.value.dissolveFertilizerTasks) },
-  { key: 'pumpOperations', title: 'Pump operations', items: asList(operations.value.pumpOperations) },
-  { key: 'droneMappingOperations', title: 'Drone mapping', items: asList(operations.value.droneMappingOperations) },
-  { key: 'droneSprayingOperations', title: 'Drone spraying', items: asList(operations.value.droneSprayingOperations) },
-  { key: 'droneSpreadingOperations', title: 'Drone spreading', items: asList(operations.value.droneSpreadingOperations) },
-  { key: 'droneScoutingOperations', title: 'Drone scouting', items: asList(operations.value.droneScoutingOperations) }
+  { key: 'actionPlans', title: '执行计划', items: asList(operations.value.actionPlans) },
+  { key: 'rotationRuns', title: '轮灌', items: asList(operations.value.rotationRuns) },
+  { key: 'fertigationTasks', title: '水肥', items: asList(operations.value.fertigationTasks) },
+  { key: 'dissolveTasks', title: '肥料溶解', items: asList(operations.value.dissolveTasks ?? operations.value.dissolveFertilizerTasks) },
+  { key: 'pumpOperations', title: '水泵作业', items: asList(operations.value.pumpOperations) },
+  { key: 'droneMappingOperations', title: '无人机测绘', items: asList(operations.value.droneMappingOperations) },
+  { key: 'droneSprayingOperations', title: '无人机喷洒', items: asList(operations.value.droneSprayingOperations) },
+  { key: 'droneSpreadingOperations', title: '无人机撒播', items: asList(operations.value.droneSpreadingOperations) },
+  { key: 'droneScoutingOperations', title: '无人机巡田', items: asList(operations.value.droneScoutingOperations) }
 ]);
 const hasOperations = computed(() => groups.value.some((group) => group.items.length > 0));
 

@@ -1,32 +1,32 @@
 <template>
   <section class="page">
     <DemoHeader />
-    <div v-if="isMock" class="mock-banner">Current reports are mock fallback.</div>
+    <div v-if="isMock" class="mock-banner">当前为模拟数据。</div>
     <header class="section-header">
-      <h1>Reports</h1>
-      <p class="subtle">Operational summary, not PDF export.</p>
+      <h1>报表</h1>
+      <p class="subtle">运营数据汇总，暂不支持 PDF 导出。</p>
     </header>
     <section class="metric-grid">
-      <Metric label="Today water" :value="report.dailyWaterUsage" />
-      <Metric label="Month water" :value="report.monthlyWaterUsage" />
-      <Metric label="Water per mu" :value="report.waterPerMu" />
-      <Metric label="Online rate" :value="`${report.deviceOnlineRate ?? 0}%`" />
-      <Metric label="Execution success" :value="`${report.actionExecutionSuccessRate ?? 0}%`" />
-      <Metric label="AI adoption" :value="`${report.aiAdoptionRate ?? 0}%`" />
-      <Metric label="Irrigation volume" :value="`${report.irrigationVolumeSummary?.quantity ?? 0} ${report.irrigationVolumeSummary?.unit ?? ''}`" />
-      <Metric label="Fertigation tasks" :value="report.fertigationTaskSummary?.total ?? 0" />
-      <Metric label="Pressure anomalies" :value="report.pressureAnomalyCount ?? 0" />
-      <Metric label="Flow anomalies" :value="report.flowAnomalyCount ?? 0" />
-      <Metric label="Rotation success" :value="`${report.rotationExecutionSuccessRate ?? 0}%`" />
-      <Metric label="Drone operations" :value="report.droneOperationCount ?? 0" />
-      <Metric label="Spraying area" :value="`${report.sprayingAreaTotal ?? 0} mu`" />
-      <Metric label="Drone coverage" :value="`${report.averageCoverageRate ?? 0}%`" />
-      <Metric label="Chemical usage" :value="`${report.chemicalUsageTotal ?? 0} L`" />
-      <Metric label="Operation cost" :value="`${report.operationCostSummary?.totalAmount ?? 0} ${report.operationCostSummary?.currency ?? 'CNY'}`" />
-      <Metric label="Pesticide volume" :value="`${report.pesticideUsageSummary?.sprayVolumeL ?? 0} L`" />
-      <Metric label="Drone service cost" :value="`${report.droneServiceCostSummary?.totalAmount ?? 0} ${report.droneServiceCostSummary?.currency ?? 'CNY'}`" />
-      <Metric label="Crop observations" :value="report.cropHealthSummary?.total ?? 0" />
-      <Metric label="Yield factors" :value="report.yieldAnalysisSummary?.factorCount ?? 0" />
+      <Metric label="今日用水" :value="report.dailyWaterUsage" />
+      <Metric label="本月用水" :value="report.monthlyWaterUsage" />
+      <Metric label="亩均用水" :value="report.waterPerMu" />
+      <Metric label="设备在线率" :value="`${report.deviceOnlineRate ?? 0}%`" />
+      <Metric label="执行成功率" :value="`${report.actionExecutionSuccessRate ?? 0}%`" />
+      <Metric label="AI 采纳率" :value="`${report.aiAdoptionRate ?? 0}%`" />
+      <Metric label="灌溉水量" :value="`${report.irrigationVolumeSummary?.quantity ?? 0} ${report.irrigationVolumeSummary?.unit ?? ''}`" />
+      <Metric label="水肥任务数" :value="report.fertigationTaskSummary?.total ?? 0" />
+      <Metric label="压力异常" :value="report.pressureAnomalyCount ?? 0" />
+      <Metric label="流量异常" :value="report.flowAnomalyCount ?? 0" />
+      <Metric label="轮灌成功率" :value="`${report.rotationExecutionSuccessRate ?? 0}%`" />
+      <Metric label="无人机作业数" :value="report.droneOperationCount ?? 0" />
+      <Metric label="喷洒面积" :value="`${report.sprayingAreaTotal ?? 0} 亩`" />
+      <Metric label="无人机覆盖率" :value="`${report.averageCoverageRate ?? 0}%`" />
+      <Metric label="药剂用量" :value="`${report.chemicalUsageTotal ?? 0} L`" />
+      <Metric label="作业成本" :value="`${report.operationCostSummary?.totalAmount ?? 0} ${report.operationCostSummary?.currency ?? 'CNY'}`" />
+      <Metric label="农药用量" :value="`${report.pesticideUsageSummary?.sprayVolumeL ?? 0} L`" />
+      <Metric label="无人机服务成本" :value="`${report.droneServiceCostSummary?.totalAmount ?? 0} ${report.droneServiceCostSummary?.currency ?? 'CNY'}`" />
+      <Metric label="作物观察记录" :value="report.cropHealthSummary?.total ?? 0" />
+      <Metric label="产量因素" :value="report.yieldAnalysisSummary?.factorCount ?? 0" />
     </section>
     <section class="panel">
       <div class="panel-title">汇报摘要</div>
@@ -37,13 +37,13 @@
       <p>产量影响因素：{{ report.yieldAnalysisSummary?.factorCount ?? 0 }} 条因素进入后续分析。</p>
     </section>
     <section class="panel">
-      <div class="panel-title">Input-output placeholders</div>
-      <p class="subtle">P11.6 records cost, crop-health and yield-factor basics for later ROI analysis.</p>
-      <p>Cost categories: {{ Object.keys(report.operationCostSummary?.byCategory ?? {}).join(', ') || '--' }}</p>
-      <p>Yield factor types: {{ Object.keys(report.yieldAnalysisSummary?.byFactorType ?? {}).join(', ') || '--' }}</p>
+      <div class="panel-title">投入产出占位数据</div>
+      <p class="subtle">记录成本、作物健康与产量因素基础数据，供后续投入产出分析使用。</p>
+      <p>成本类别：{{ Object.keys(report.operationCostSummary?.byCategory ?? {}).join(', ') || '--' }}</p>
+      <p>产量因素类型：{{ Object.keys(report.yieldAnalysisSummary?.byFactorType ?? {}).join(', ') || '--' }}</p>
     </section>
     <section v-if="!hasReportData || !demoReady" class="panel">
-      <div class="panel-title">Reports data not ready</div>
+      <div class="panel-title">报表数据尚未就绪</div>
       <p class="warning-text">请先执行 npx prisma db seed，生成成本、作物健康、产量因素和作业报告。</p>
       <RouterLink class="ghost-button link-button" to="/demo-status">查看 Demo 状态</RouterLink>
     </section>

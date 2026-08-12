@@ -17,6 +17,8 @@ const userMessages: Record<string, string> = {
   APPROVAL_RELEASE_NOT_IMPLEMENTED: '真实控制审批放行流程尚未启用。',
   VALVE_FEEDBACK_REQUIRED: '缺少阀门反馈，当前操作已被阻止。',
   VALVE_OFFLINE: '阀门设备当前离线。',
+  PUMP_INTERLOCK_BLOCKED: '安全联锁保护中：需先满足水泵/阀门联锁条件才能继续操作。',
+  STOP_PUMP_BEFORE_VALVE_CLOSE: '请先停止水泵，再关闭阀门。',
   FEEDBACK_TIMEOUT: '设备执行反馈超时，请检查设备和网络连接。',
   FEEDBACK_MISMATCH: '设备实际反馈与预期状态不一致。',
   OUTCOME_UNKNOWN: '设备执行结果暂时无法确认，请勿重复操作并等待人工核查。',

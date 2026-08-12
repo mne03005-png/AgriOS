@@ -1,9 +1,9 @@
 <template>
   <section class="quick-actions">
-    <button class="secondary-button" disabled title="Read-only mode">Emergency stop disabled</button>
-    <button class="primary-button" disabled title="Read-only mode">Manual valve disabled</button>
-    <button class="secondary-button" disabled>Auto mode disabled</button>
-    <RouterLink class="secondary-button" to="/devices">Read-only devices</RouterLink>
-    <RouterLink class="secondary-button" to="/alerts">Alerts</RouterLink>
+    <button class="secondary-button" disabled title="功能准备中，尚未开放">急停（功能准备中）</button>
+    <button class="primary-button" disabled title="功能准备中，尚未开放">手动阀门（功能准备中）</button>
+    <button class="secondary-button" disabled title="功能准备中，尚未开放">自动模式（功能准备中）</button>
+    <RouterLink class="secondary-button" to="/devices">设备只读视图</RouterLink>
+    <RouterLink class="secondary-button" to="/alerts">告警</RouterLink>
   </section>
 </template>

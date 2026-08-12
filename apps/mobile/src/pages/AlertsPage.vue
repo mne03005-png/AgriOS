@@ -1,19 +1,19 @@
 <template>
   <section class="page">
-    <div v-if="isMock" class="mock-banner">Current alerts are mock fallback.</div>
-    <header class="section-header"><h1>Alerts</h1></header>
+    <div v-if="isMock" class="mock-banner">当前为模拟数据。</div>
+    <header class="section-header"><h1>告警</h1></header>
     <section class="operation-group">
-      <div class="section-header compact"><h2>Safety alerts</h2></div>
+      <div class="section-header compact"><h2>安全告警</h2></div>
       <article class="panel alert-card" v-for="item in safetyAlerts" :key="item.id">
         <div class="card-topline"><strong>{{ item.message }}</strong><StatusBadge :label="item.severity ?? 'MEDIUM'" tone="warn" /></div>
-        <p class="subtle">Field {{ item.fieldId ?? '-' }}</p>
+        <p class="subtle">田块 {{ item.fieldId ?? '-' }}</p>
       </article>
     </section>
     <section class="operation-group">
-      <div class="section-header compact"><h2>Irrigation anomalies</h2></div>
+      <div class="section-header compact"><h2>灌溉异常</h2></div>
       <article class="panel alert-card" v-for="item in anomalies" :key="item.id">
         <div class="card-topline"><strong>{{ item.message }}</strong><StatusBadge :label="item.type ?? 'ANOMALY'" tone="warn" /></div>
-        <p class="subtle">Pressure, flow, pump, tank and valve checks are backend generated.</p>
+        <p class="subtle">压力、流量、水泵、水箱和阀门检查均由后端生成。</p>
       </article>
     </section>
   </section>

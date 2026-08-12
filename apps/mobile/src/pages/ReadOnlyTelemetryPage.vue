@@ -64,6 +64,8 @@
 import { onMounted, ref } from 'vue';
 import { getReadOnlyDeadLetters, getReadOnlyDeviceHistory, getReadOnlyDevices } from '../api/mobile-api';
 import DemoHeader from '../components/common/DemoHeader.vue';
+import { authStore } from '../stores/auth.store';
+import { canonicalRole } from '../services/permissions';
 
 const loading = ref(true);
 const historyLoading = ref(false);
@@ -73,7 +75,12 @@ const selected = ref<any | null>(null);
 const history = ref<any[]>([]);
 const deadLetters = ref<any[]>([]);
 const range = ref<'24h' | '7d'>('24h');
-const isAdmin = ref(localStorage.getItem('agrios_user_role') === 'PLATFORM_ADMIN' || localStorage.getItem('agrios_user_role') === 'TENANT_ADMIN');
+// The previous check read a localStorage role key the app never populated, so the dead
+// letters panel never rendered for anyone. Use the canonical role source (same one router
+// guards use) instead. This route is already restricted to INSTALLER/ENGINEER/SUPER_ADMIN;
+// the dead letters panel further narrows to SUPER_ADMIN (the canonical mapping of the
+// legacy PLATFORM_ADMIN role this check originally intended).
+const isAdmin = ref(canonicalRole(authStore.user?.canonicalRole ?? authStore.user?.role) === 'SUPER_ADMIN');
 
 onMounted(async () => {
   try {

@@ -1,17 +1,17 @@
 <template>
   <section class="page">
     <DemoHeader />
-    <div v-if="isMock" class="mock-banner">Current drone data is mock fallback.</div>
+    <div v-if="isMock" class="mock-banner">当前为模拟数据。</div>
     <header class="section-header">
-      <h1>Drone Operations</h1>
-      <p class="subtle">Mapping, spraying, spreading and scouting records.</p>
+      <h1>无人机作业</h1>
+      <p class="subtle">测绘、喷洒、撒播与巡田记录。</p>
     </header>
     <section class="button-row">
-      <RouterLink class="primary-button" to="/drone-reviews">Review Queue</RouterLink>
-      <RouterLink class="secondary-button" to="/reports">Reports</RouterLink>
+      <RouterLink class="primary-button" to="/drone-reviews">审核队列</RouterLink>
+      <RouterLink class="secondary-button" to="/reports">报表</RouterLink>
     </section>
     <section v-if="!operations.length || !demoReady" class="panel">
-      <div class="panel-title">Drone demo data not ready</div>
+      <div class="panel-title">无人机 Demo 数据尚未就绪</div>
       <p class="warning-text">请先执行 npx prisma db seed，生成 Demo 无人机作业、审核和报告。</p>
       <RouterLink class="ghost-button link-button" to="/demo-status">查看 Demo 状态</RouterLink>
     </section>
@@ -42,10 +42,10 @@ const isMock = ref(true);
 const demoReady = ref(true);
 
 const groups = computed(() => [
-  { type: 'MAPPING', label: 'Mapping operations', items: byType('MAPPING') },
-  { type: 'SPRAYING', label: 'Spraying operations', items: byType('SPRAYING') },
-  { type: 'SPREADING', label: 'Spreading operations', items: byType('SPREADING') },
-  { type: 'SCOUTING', label: 'Scouting operations', items: byType('SCOUTING') }
+  { type: 'MAPPING', label: '测绘作业', items: byType('MAPPING') },
+  { type: 'SPRAYING', label: '喷洒作业', items: byType('SPRAYING') },
+  { type: 'SPREADING', label: '撒播作业', items: byType('SPREADING') },
+  { type: 'SCOUTING', label: '巡田作业', items: byType('SCOUTING') }
 ]);
 
 onMounted(load);
