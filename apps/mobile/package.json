@@ -17,6 +17,7 @@
     ,"test:ux1d-farm-field-context": "node scripts/verify-ux1d-farm-field-context.mjs"
     ,"test:ux1e-domain-navigation": "node scripts/verify-ux1e-domain-navigation.mjs"
     ,"test:ux1f-engineer-workspace": "node scripts/verify-ux1f-engineer-workspace.mjs"
+    ,"test:ux1g-installer-workspace": "node scripts/verify-ux1g-installer-workspace.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-vue": "^6.0.0",
