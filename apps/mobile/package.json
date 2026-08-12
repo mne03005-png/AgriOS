@@ -12,6 +12,7 @@
     ,"test:r1c-errors": "node scripts/verify-r1c-api-errors.mjs"
     ,"test:ux1a-route-integrity": "node scripts/verify-ux1a-route-link-integrity.mjs"
     ,"test:ux1a-terminology-safety": "node scripts/verify-ux1a-terminology-safety.mjs"
+    ,"test:ux1b-role-navigation": "node scripts/verify-ux1b-role-navigation.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-vue": "^6.0.0",

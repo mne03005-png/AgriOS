@@ -29,6 +29,7 @@ import SuperAdminPage from '../pages/SuperAdminPage.vue';
 import ActionQueuePage from '../pages/ActionQueuePage.vue';
 import { authStore } from '../stores/auth.store';
 import { canAccess, type CanonicalRole } from '../services/permissions';
+import { getDefaultRouteForRole } from '../services/role-navigation';
 
 function normalizeBase(base: string) {
   return base.endsWith('/') ? base : `${base}/`;
@@ -53,7 +54,7 @@ function hasStoredToken() {
 export const router = createRouter({
   history: createWebHistory(resolveRouterBase()),
   routes: [
-    { path: '/', redirect: '/cockpit' },
+    { path: '/', redirect: () => getDefaultRouteForRole(authStore.user?.canonicalRole ?? authStore.user?.role) },
     { path: '/cockpit', component: CockpitPage },
     { path: '/map', component: MapPage },
     { path: '/operations', component: OperationsPage },
@@ -82,7 +83,7 @@ export const router = createRouter({
     { path: '/drone-reviews', component: DroneReviewPage, meta: { roles: ['MANAGER', 'ENGINEER', 'SUPER_ADMIN'] } },
     { path: '/boundaries/review', component: BoundaryReviewPage, meta: { roles: ['MANAGER', 'INSTALLER', 'ENGINEER', 'SUPER_ADMIN'] } },
     { path: '/forbidden', component: ForbiddenPage, meta: { public: true } },
-    { path: '/:pathMatch(.*)*', redirect: '/cockpit' }
+    { path: '/:pathMatch(.*)*', redirect: () => getDefaultRouteForRole(authStore.user?.canonicalRole ?? authStore.user?.role) }
   ]
 });
 

@@ -33,6 +33,7 @@ import { useRoute, useRouter } from 'vue-router';
 import DemoHeader from '../components/common/DemoHeader.vue';
 import { login, logout } from '../api/auth-api';
 import { authStore } from '../stores/auth.store';
+import { resolveLandingRoute } from '../services/role-navigation';
 
 const router = useRouter();
 const route = useRoute();
@@ -47,8 +48,11 @@ async function submit() {
   try {
     const result = await login({ email: email.value, password: password.value });
     authStore.setSession(result.accessToken, result.user);
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/profile';
-    await router.replace(redirect);
+    // Priority: an explicit, internal redirect/deep-link target beats the role's default
+    // landing. Falls back to the canonical role's default workspace only when there is no
+    // legitimate explicit destination (see services/role-navigation.ts).
+    const destination = resolveLandingRoute(result.user.canonicalRole ?? result.user.role, route.query.redirect);
+    await router.replace(destination);
   } catch (error) {
     message.value = error instanceof Error ? error.message : String(error);
   } finally {

@@ -25,12 +25,22 @@ import AppTabBar from './components/common/AppTabBar.vue';
 import { primaryNavigation, workspaceNavigation } from './config/navigation';
 import { authStore } from './stores/auth.store';
 import { canonicalRole, canAccess } from './services/permissions';
+import { getDefaultRouteForRole } from './services/role-navigation';
 import { logout } from './api/auth-api';
 
 const online = ref(navigator.onLine);
 const role = computed(() => canonicalRole(authStore.user?.canonicalRole ?? authStore.user?.role));
 const farmName = computed(() => (authStore.user?.farmId ? `农场 ${authStore.user.farmId}` : '请选择农场'));
-const visibleNavigation = computed(() => [...primaryNavigation, ...workspaceNavigation].filter((item) => canAccess(item.roles, role.value)));
+// FARMER/MANAGER keep the existing farm-operation-first order (their default landing is
+// already first, /cockpit, or unemphasized, /manager). INSTALLER/ENGINEER/SUPER_ADMIN get
+// their default workspace floated to the top as a "default focus" cue -- access itself is
+// unchanged, this is a stable reorder over the same canAccess-filtered list.
+const visibleNavigation = computed(() => {
+  const combined = [...primaryNavigation, ...workspaceNavigation].filter((item) => canAccess(item.roles, role.value));
+  if (role.value === 'FARMER' || role.value === 'MANAGER') return combined;
+  const defaultPath = getDefaultRouteForRole(role.value);
+  return [...combined].sort((a, b) => Number(b.path === defaultPath) - Number(a.path === defaultPath));
+});
 const updateNetwork = () => { online.value = navigator.onLine; };
 onMounted(() => { window.addEventListener('online', updateNetwork); window.addEventListener('offline', updateNetwork); });
 onBeforeUnmount(() => { window.removeEventListener('online', updateNetwork); window.removeEventListener('offline', updateNetwork); });
