@@ -136,17 +136,21 @@ test('19 AppTabBar.vue source actually implements this selection (not silently d
 // --- Desktop role-aware navigation (section 24) ---
 function desktopNavFor(rawRole) {
   const role = permissions.canonicalRole(rawRole);
-  // UX-1E: App.vue's real visibleNavigation also folds in desktopSecondaryNavigation (数据/reports).
-  const combined = [...navigation.primaryNavigation, ...navigation.desktopSecondaryNavigation, ...navigation.workspaceNavigation].filter((item) => permissions.canAccess(item.roles, role));
+  // UX-1E closeout: App.vue's real visibleNavigation inserts desktopSecondaryNavigation
+  // (数据/reports) immediately before 我的(/profile), giving the accepted exact order
+  // 首页/田块/作业/告警/数据/我的 -- not appended after /profile.
+  const profileIndex = navigation.primaryNavigation.findIndex((item) => item.path === '/profile');
+  const withDesktopSecondary = [...navigation.primaryNavigation.slice(0, profileIndex), ...navigation.desktopSecondaryNavigation, ...navigation.primaryNavigation.slice(profileIndex)];
+  const combined = [...withDesktopSecondary, ...navigation.workspaceNavigation].filter((item) => permissions.canAccess(item.roles, role));
   if (role === 'FARMER' || role === 'MANAGER') return combined;
   const defaultPath = roleNav.getDefaultRouteForRole(role);
   return [...combined].sort((a, b) => Number(b.path === defaultPath) - Number(a.path === defaultPath));
 }
-test('20 FARMER desktop nav: farm-operation only, no workspace entries', () => {
-  // UX-1E: desktop also gains 数据(/reports) via desktopSecondaryNavigation, and
-  // 农事(/farm-records) was replaced by 告警(/alerts) -- see note on test 14.
+test('20 FARMER desktop nav: farm-operation only, no workspace entries, exact accepted order', () => {
+  // UX-1E closeout: accepted order is 首页/田块/作业/告警/数据/我的 -- 数据(/reports) sits
+  // before 我的(/profile), not after it.
   const paths = desktopNavFor('FARMER').map((i) => i.path);
-  assert.deepEqual(paths, ['/cockpit', '/map', '/operations', '/alerts', '/profile', '/reports']);
+  assert.deepEqual(paths, ['/cockpit', '/map', '/operations', '/alerts', '/reports', '/profile']);
 });
 test('21 MANAGER desktop nav: farm-operation + manager workspace, not engineer/platform', () => {
   const paths = desktopNavFor('FARM_MANAGER').map((i) => i.path);

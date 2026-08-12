@@ -53,7 +53,13 @@ function mobileTabsFor(rawRole) {
 }
 function desktopNavFor(rawRole) {
   const role = permissions.canonicalRole(rawRole);
-  const combined = [...roleNav.applyRoleAwareHome(navigation.primaryNavigation, role), ...navigation.desktopSecondaryNavigation, ...navigation.workspaceNavigation].filter((item) => permissions.canAccess(item.roles, role));
+  // UX-1E closeout: desktopSecondaryNavigation (数据/reports) is inserted immediately before
+  // 我的(/profile), matching App.vue's real visibleNavigation, to produce the accepted exact
+  // order 首页/田块/作业/告警/数据/我的 rather than appending 数据 after 我的.
+  const home = roleNav.applyRoleAwareHome(navigation.primaryNavigation, role);
+  const profileIndex = home.findIndex((item) => item.path === '/profile');
+  const withDesktopSecondary = [...home.slice(0, profileIndex), ...navigation.desktopSecondaryNavigation, ...home.slice(profileIndex)];
+  const combined = [...withDesktopSecondary, ...navigation.workspaceNavigation].filter((item) => permissions.canAccess(item.roles, role));
   const deduped = combined.filter((item, index) => combined.findIndex((other) => other.path === item.path) === index);
   if (role === 'FARMER' || role === 'MANAGER') return deduped;
   const defaultPath = roleNav.getDefaultRouteForRole(role);
@@ -82,18 +88,22 @@ test('3-5 INSTALLER/ENGINEER/SUPER_ADMIN mobile nav is still workspaceNavigation
 });
 
 // --- 6-7: FARMER/MANAGER desktop nav ---
-test('6 FARMER desktop nav contains 首页/田块/作业/告警/数据/我的', () => {
+test('6 FARMER desktop nav is exactly 首页/田块/作业/告警/数据/我的 in that order', () => {
   const labels = desktopNavFor('FARMER').map((i) => i.label);
-  for (const expected of ['首页', '田块', '作业', '告警', '数据', '我的']) assert.ok(labels.includes(expected), `missing ${expected}`);
+  assert.deepEqual(labels, ['首页', '田块', '作业', '告警', '数据', '我的']);
 });
-test('7 MANAGER desktop nav contains the same six domains', () => {
+test('7 MANAGER desktop nav is exactly 首页/田块/作业/告警/数据/我的 in that order', () => {
   const labels = desktopNavFor('FARM_MANAGER').map((i) => i.label);
-  for (const expected of ['首页', '田块', '作业', '告警', '数据', '我的']) assert.ok(labels.includes(expected), `missing ${expected}`);
+  assert.deepEqual(labels, ['首页', '田块', '作业', '告警', '数据', '我的']);
 });
 test('7b MANAGER desktop nav has no duplicate link to /manager (首页 already resolves there, 管理工作台 would be a second identical link)', () => {
   const paths = desktopNavFor('FARM_MANAGER').map((i) => i.path);
   assert.equal(paths.filter((p) => p === '/manager').length, 1, `expected exactly one /manager link, found ${paths.filter((p) => p === '/manager').length}`);
   assert.match(appVue, /combined\.findIndex\(\(other\) => other\.path === item\.path\) === index/, 'App.vue must dedupe visibleNavigation by path');
+});
+test('7c App.vue source actually inserts 数据 before 我的 by path (not silently diverged back to append-after-profile)', () => {
+  assert.match(appVue, /profileIndex = home\.findIndex\(\(item\) => item\.path === '\/profile'\)/);
+  assert.match(appVue, /home\.slice\(0, profileIndex\), \.\.\.desktopSecondaryNavigation, \.\.\.home\.slice\(profileIndex\)/);
 });
 
 // --- 8-12 ---

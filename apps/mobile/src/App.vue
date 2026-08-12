@@ -41,14 +41,21 @@ const farmName = computed(() => farmStore.currentFarmName ?? (farmStore.currentF
 // calls farmStore.setCurrentFarm() directly when a field proves a different farm, which is a
 // later, stronger correction this watcher must not fight (it only reacts to identity changes).
 watch(() => authStore.user, () => farmStore.resolveInitialFarm(), { immediate: true });
-// UX-1E accepted six-domain desktop shell for FARMER/MANAGER (首页/田块/作业/告警/数据/我的):
-// primaryNavigation (with 首页 resolved to the actual role-aware landing) plus the desktop-
-// only 数据 entry. FARMER/MANAGER keep the existing farm-operation-first order (their default
-// landing is already first). INSTALLER/ENGINEER/SUPER_ADMIN get their default workspace
-// floated to the top as a "default focus" cue -- access itself is unchanged, this is a stable
-// reorder over the same canAccess-filtered list.
+// UX-1E accepted six-domain desktop shell for FARMER/MANAGER, in this exact order:
+// 首页/田块/作业/告警/数据/我的. primaryNavigation itself stays mobile's 首页/田块/作业/告警/我的
+// (AppTabBar.vue consumes it unchanged) -- desktop inserts the 数据 entry ahead of 我的 by path
+// rather than hardcoding an index, so this keeps working if primaryNavigation's shape changes.
+// FARMER/MANAGER keep the existing farm-operation-first order (their default landing is
+// already first). INSTALLER/ENGINEER/SUPER_ADMIN get their default workspace floated to the
+// top as a "default focus" cue -- access itself is unchanged, this is a stable reorder over the
+// same canAccess-filtered list.
 const visibleNavigation = computed(() => {
-  const combined = [...applyRoleAwareHome(primaryNavigation, role.value), ...desktopSecondaryNavigation, ...workspaceNavigation].filter((item) => canAccess(item.roles, role.value));
+  const home = applyRoleAwareHome(primaryNavigation, role.value);
+  const profileIndex = home.findIndex((item) => item.path === '/profile');
+  const withDesktopSecondary = profileIndex === -1
+    ? [...home, ...desktopSecondaryNavigation]
+    : [...home.slice(0, profileIndex), ...desktopSecondaryNavigation, ...home.slice(profileIndex)];
+  const combined = [...withDesktopSecondary, ...workspaceNavigation].filter((item) => canAccess(item.roles, role.value));
   // MANAGER's resolved 首页 now points at the same /manager destination as workspaceNavigation's
   // own 管理工作台 entry (applyRoleAwareHome above); keep only the first (首页) to avoid two
   // links to the identical page, consistent with UX-1E's one-canonical-discovery-home principle.
