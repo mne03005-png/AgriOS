@@ -35,7 +35,7 @@ export const mockDroneOperations = [
 ];
 
 export const mockCockpit = {
-  farm: { id: defaultFarmId, name: 'Demo onion family farm' },
+  farm: { id: defaultFarmId, name: 'Demo onion family farm', fields: [{ id: defaultFieldId, name: 'Onion field A' }] },
   weather: { summary: 'Sunny, 31C, southeast wind' },
   deviceOnlineRate: 86,
   autoModeStatus: { enabled: false, policy: 'assisted' },
@@ -55,6 +55,7 @@ export const mockCockpit = {
   ],
   latestDecision: { recommendation: 'SHOULD_IRRIGATE', reason: 'Soil moisture is below demo onion growth target.', confidence: 0.82 },
   latestActionPlans: [{ id: 'plan_001', status: 'PENDING_APPROVAL', safety: { warnings: ['Manual confirmation required'] } }],
+  droneOperations: mockDroneOperations,
   miniMapLayers: [{ id: 'layer_001', name: 'Onion field A', type: 'FIELD' }],
   quickActions: { emergencyStop: true, manualValve: true, autoMode: false, alerts: true }
 };

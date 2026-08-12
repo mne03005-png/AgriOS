@@ -789,6 +789,14 @@ button:disabled {
 .capability-state { margin-top: 12px; color: #64748b; font-size: 12px; }
 .app-main { min-width: 0; }
 
+/* UX-1C Farmer/Manager Home: secondary (lower-priority) content composition */
+.dashboard-grid { display: grid; gap: 14px; }
+.status-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0; }
+.attention-row-main { display: flex; align-items: center; gap: 8px; }
+.attention-link { color: var(--danger); font-weight: 800; }
+.freshness { font-size: 12px; }
+.quick-actions-label { margin-top: 20px; }
+
 @media (max-width: 767px) {
   html, body, #app { max-width: 100%; overflow-x: hidden; }
   .app-context { align-items: flex-start; font-size: 13px; }
@@ -815,4 +823,5 @@ button:disabled {
   .app-main { grid-column: 2; grid-row: 2; width: 100%; max-width: 1600px; padding: 24px 32px; }
   .tabbar { display: none; }
   .workspace-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

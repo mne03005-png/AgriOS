@@ -1,8 +1,10 @@
 // Chinese labels for backend status/severity codes confirmed in use by normal-user
-// (FARMER/MANAGER) surfaces via StatusBadge (OperationsPage, AlertsPage, BoundaryReviewPage)
-// as of the UX-1A audit. Unknown/future codes fall back to the raw value rather than crash
-// or silently disappear -- see translateStatusLabel().
+// (FARMER/MANAGER) surfaces via StatusBadge (OperationsPage, AlertsPage, BoundaryReviewPage,
+// and since UX-1C, CockpitPage/ManagerWorkbenchPage). Unknown/future codes fall back to the
+// raw value rather than crash or silently disappear -- see translateStatusLabel().
 const statusLabels: Record<string, string> = {
+  NORMAL: '正常',
+  RUNNING: '运行中',
   QUEUED: '等待执行',
   PENDING: '待处理',
   PENDING_APPROVAL: '需要审批',

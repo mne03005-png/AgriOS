@@ -1,8 +1,8 @@
 <template>
   <section class="panel compact-panel">
     <div class="card-topline">
-      <strong>Farm Activity</strong>
-      <span class="subtle">{{ items.length }} latest</span>
+      <strong>最近动态</strong>
+      <span class="subtle">最新 {{ items.length }} 条</span>
     </div>
     <div class="timeline-list">
       <div v-for="item in items" :key="item.id" class="timeline-item">
