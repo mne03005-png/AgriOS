@@ -201,6 +201,42 @@ test('28 route count remains 30/27/3', () => {
   assert.equal(nonPage, 3, `expected 3 non-page routes, found ${nonPage}`);
 });
 
+// --- Closeout: selected-device context consistency (getValveControlStatus is demo-valve-fixed,
+// not selected-device-scoped -- confirmed by reading production-api.ts: getValveControlStatus's
+// deviceId param defaults to 'demo-valve-001' and EngineerWorkbenchPage always calls it with the
+// hardcoded demoValveId constant, never selectedDevice.value.id) ---
+test('36 getValveControlStatus is called with the fixed demo valve id, never the selected device id', () => {
+  assert.match(engineer, /getValveControlStatus\(demoValveId\)/);
+  assert.doesNotMatch(engineer, /getValveControlStatus\(selectedDevice/, 'must not silently pretend this call is selected-device-scoped');
+});
+test('37 Safety/Interlock stage explicitly labels the demo valve block as not the selected device', () => {
+  const stageBlock = engineer.match(/安全 \/ 联锁[\s\S]{0,1600}/)[0];
+  assert.match(stageBlock, /当前设备暂无设备级安全 \/ 联锁反馈数据/);
+  assert.match(stageBlock, /演示阀门安全测试（模拟，非当前选中设备/);
+});
+test('38 Feedback/Result stage explicitly labels the demo valve block as not the selected device', () => {
+  const stageBlock = engineer.match(/反馈 \/ 结果[\s\S]{0,900}/)[0];
+  assert.match(stageBlock, /当前设备暂无设备级执行反馈数据/);
+  assert.match(stageBlock, /演示阀门反馈（模拟测试，非当前选中设备/);
+});
+test('39 farm-wide data (tank/pump/valve warnings, queue) is explicitly labeled farm-wide, not device-specific', () => {
+  assert.match(engineer, /农场级联锁 \/ 环境条件/);
+  assert.match(engineer, /队列（农场级，未按设备过滤）/);
+  assert.match(engineer, /农场级汇总，非按当前设备过滤/);
+});
+test('40 the honest no-device-level-data notices are unconditional (not gated on device.type), since no per-device safety/feedback API exists for the general device list', () => {
+  // Both notices must render regardless of which device (if any) is selected -- they are not
+  // wrapped in a v-if keyed off selectedDevice.type, because getReadOnlyDevices() has no
+  // safety/execution-feedback fields for ANY device, valve-typed or not.
+  assert.doesNotMatch(engineer, /v-if="selectedDevice\.type/, 'must not build a device-capability model gating these notices by type');
+  assert.match(engineer, /<p class="subtle">当前设备暂无设备级安全 \/ 联锁反馈数据<\/p>/);
+  assert.match(engineer, /<p class="subtle">当前设备暂无设备级执行反馈数据<\/p>/);
+});
+test('41 identity/connectivity and telemetry-history stages remain genuinely selected-device-scoped (unaffected by the labeling fix)', () => {
+  assert.match(engineer, /getReadOnlyDeviceHistory\(selectedDevice\.value\.id, range\)/);
+  assert.match(engineer, /selectedDevice\.name \?\? selectedDevice\.code \?\? selectedDevice\.id/);
+});
+
 // --- 29: ValveControlTestPage dry-run implementation unchanged ---
 test('29 ValveControlTestPage dry-run implementation unchanged', async () => {
   const valveTest = await readSrc('../src/pages/ValveControlTestPage.vue');

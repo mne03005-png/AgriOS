@@ -92,19 +92,24 @@
       <!-- 安全 / 联锁 -->
       <section v-if="activeStage === 'safety'" class="panel">
         <div class="panel-title">安全 / 联锁</div>
-        <p v-if="valveLoading" class="subtle">正在读取安全 / 联锁状态…</p>
+        <p class="subtle">当前设备暂无设备级安全 / 联锁反馈数据</p>
+
+        <div class="panel-title">演示阀门安全测试（模拟，非当前选中设备，{{ demoValveId }}）</div>
+        <p v-if="valveLoading" class="subtle">正在读取演示阀门安全测试状态…</p>
         <p v-else-if="valveError" class="warning-text">{{ valveError }}</p>
         <div v-else class="status-grid">
           <div class="status-row"><span>Dry-Run</span><strong>{{ valveStatus.dryRun === false ? 'OFF' : 'ON' }}</strong></div>
           <div class="status-row"><span>真实控制</span><strong>{{ valveStatus.realControlAllowed ? 'ALLOWED' : 'BLOCKED' }}</strong></div>
           <div class="status-row"><span>需要物理反馈</span><strong>{{ valveStatus.feedbackRequired === false ? 'OPTIONAL' : 'REQUIRED' }}</strong></div>
-          <div class="status-row"><span>示例阀门状态（{{ demoValveId }}）</span><strong>{{ valveStatus.valveStatus ?? 'UNKNOWN' }}</strong></div>
+          <div class="status-row"><span>演示阀门状态</span><strong>{{ valveStatus.valveStatus ?? 'UNKNOWN' }}</strong></div>
         </div>
-        <div class="panel-title">液位 / 泵 / 阀门告警</div>
+
+        <div class="panel-title">农场级联锁 / 环境条件（液位 / 泵 / 阀门告警，来自 farm telemetry summary）</div>
         <p v-if="telemetryLoading" class="subtle">正在读取农场遥测汇总…</p>
         <p v-else-if="telemetryError" class="warning-text">{{ telemetryError }}</p>
         <p v-else-if="!(telemetry.tankLevelWarnings?.length)" class="subtle">暂无液位预警</p>
         <p v-else class="warning-text">{{ telemetry.tankLevelWarnings.length }} 条液位预警</p>
+
         <div class="panel-title">审批诊断</div>
         <p class="subtle">当前无可用审批诊断数据</p>
       </section>
@@ -114,19 +119,22 @@
         <div class="panel-title">指令</div>
         <RouterLink class="link-line" to="/valve-control-test">阀门安全测试（模拟）→</RouterLink>
         <p class="subtle">真实指令发送仍必须经过 Safety / Approval / ActionQueue / DeviceControl，本页不提供直接下发按钮。</p>
-        <div class="panel-title">队列</div>
+        <div class="panel-title">队列（农场级，未按设备过滤）</div>
         <p v-if="queueLoading" class="subtle">正在读取队列摘要…</p>
         <p v-else-if="queueError" class="warning-text">{{ queueError }}</p>
         <p v-else-if="!queueJobs.length" class="subtle">暂无队列任务记录</p>
-        <p v-else class="subtle">{{ queueJobs.length }} 条队列任务记录（来自 ActionQueue API）</p>
+        <p v-else class="subtle">{{ queueJobs.length }} 条队列任务记录（来自 ActionQueue API，农场级汇总，非按当前设备过滤）</p>
         <p class="subtle">队列诊断（完整视图）：功能建设中</p>
         <RouterLink class="link-line" to="/action-queue">队列诊断页面 →</RouterLink>
       </section>
 
       <!-- 反馈 / 结果 -->
       <section v-if="activeStage === 'feedback'" class="panel">
-        <div class="panel-title">反馈 / 结果（示例阀门 {{ demoValveId }}）</div>
-        <p v-if="valveLoading" class="subtle">正在读取设备反馈…</p>
+        <div class="panel-title">反馈 / 结果</div>
+        <p class="subtle">当前设备暂无设备级执行反馈数据</p>
+
+        <div class="panel-title">演示阀门反馈（模拟测试，非当前选中设备，{{ demoValveId }}）</div>
+        <p v-if="valveLoading" class="subtle">正在读取演示阀门反馈…</p>
         <p v-else-if="valveError" class="warning-text">{{ valveError }}</p>
         <template v-else>
           <div class="status-row"><span>结果</span><strong><StatusBadge :label="feedbackCode" raw :tone="feedbackTone" /></strong></div>
