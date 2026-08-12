@@ -20,17 +20,27 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppTabBar from './components/common/AppTabBar.vue';
 import { primaryNavigation, workspaceNavigation } from './config/navigation';
 import { authStore } from './stores/auth.store';
+import { farmStore } from './stores/farm.store';
 import { canonicalRole, canAccess } from './services/permissions';
 import { getDefaultRouteForRole } from './services/role-navigation';
 import { logout } from './api/auth-api';
 
 const online = ref(navigator.onLine);
 const role = computed(() => canonicalRole(authStore.user?.canonicalRole ?? authStore.user?.role));
-const farmName = computed(() => (authStore.user?.farmId ? `农场 ${authStore.user.farmId}` : '请选择农场'));
+// Real farm name once resolved (login/me already return it); falls back to the raw id while a
+// name isn't known yet (e.g. right after a field-driven farm correction), and to a neutral
+// label only when no farm has been resolved at all -- never fabricates a name.
+const farmName = computed(() => farmStore.currentFarmName ?? (farmStore.currentFarmId ? `农场 ${farmStore.currentFarmId}` : '请选择农场'));
+// Fires on initial mount (session restoration) and on every authStore.user reference change
+// (fresh login via setSession, refreshed profile via setUser, logout via clear() -> null).
+// This is the ONLY place initial farm resolution is wired -- FieldDetailPage.vue separately
+// calls farmStore.setCurrentFarm() directly when a field proves a different farm, which is a
+// later, stronger correction this watcher must not fight (it only reacts to identity changes).
+watch(() => authStore.user, () => farmStore.resolveInitialFarm(), { immediate: true });
 // FARMER/MANAGER keep the existing farm-operation-first order (their default landing is
 // already first, /cockpit, or unemphasized, /manager). INSTALLER/ENGINEER/SUPER_ADMIN get
 // their default workspace floated to the top as a "default focus" cue -- access itself is

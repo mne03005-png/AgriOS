@@ -3,6 +3,6 @@ import { farmStore } from './farm.store';
 
 export const cockpitStore = {
   async load() {
-    return getCockpit(farmStore.currentFarmId);
+    return getCockpit(farmStore.currentFarmIdOrDefault);
   }
 };

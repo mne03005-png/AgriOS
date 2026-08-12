@@ -61,15 +61,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import DemoHeader from '../components/common/DemoHeader.vue';
 import StatusBadge from '../components/common/StatusBadge.vue';
 import { getAlerts, getCockpit } from '../api/mobile-api';
 import { getDroneReviews } from '../api/drone-review-api';
 import { getFieldBoundaries } from '../api/gis-api';
-import { defaultFarmId, mockCockpit, mockAlerts } from '../api/mock-data';
+import { mockCockpit, mockAlerts } from '../api/mock-data';
 import { translateStatusLabel } from '../services/status-translation';
 import { countFieldsOk, deriveFieldAttention, formatFreshness } from '../services/home-summary';
+import { farmStore } from '../stores/farm.store';
 
 const data = ref<any>(mockCockpit);
 const alerts = ref<any>(mockAlerts);
@@ -78,13 +79,17 @@ const lastUpdatedAt = ref<string | null>(null);
 const pendingDroneReviews = ref(0);
 const pendingBoundaryReviews = ref(0);
 
-onMounted(async () => {
+async function load() {
+  // Same shared CURRENT FARM as Farmer Home (UX-1D section 26); same race guard as Farmer
+  // Home (UX-1D section 31).
+  const requestedFarmId = farmStore.currentFarmIdOrDefault;
   const [cockpitResult, alertsResult, droneReviewsResult, boundariesResult] = await Promise.allSettled([
-    getCockpit(defaultFarmId),
-    getAlerts(defaultFarmId),
-    getDroneReviews(defaultFarmId, 'PENDING'),
-    getFieldBoundaries(defaultFarmId, 'CANDIDATE')
+    getCockpit(requestedFarmId),
+    getAlerts(requestedFarmId),
+    getDroneReviews(requestedFarmId, 'PENDING'),
+    getFieldBoundaries(requestedFarmId, 'CANDIDATE')
   ]);
+  if (requestedFarmId !== farmStore.currentFarmIdOrDefault) return;
   if (cockpitResult.status === 'fulfilled') {
     data.value = cockpitResult.value.data;
     isMock.value = cockpitResult.value.isMock;
@@ -95,7 +100,10 @@ onMounted(async () => {
   if (alertsResult.status === 'fulfilled') alerts.value = alertsResult.value.data;
   if (droneReviewsResult.status === 'fulfilled') pendingDroneReviews.value = (droneReviewsResult.value.data ?? []).length;
   if (boundariesResult.status === 'fulfilled') pendingBoundaryReviews.value = (boundariesResult.value.data ?? []).length;
-});
+}
+
+onMounted(load);
+watch(() => farmStore.currentFarmIdOrDefault, load);
 
 const riskTone = computed(() => String(data.value.todayRiskLevel ?? 'NORMAL').toLowerCase());
 const freshnessLabel = computed(() => formatFreshness(lastUpdatedAt.value));

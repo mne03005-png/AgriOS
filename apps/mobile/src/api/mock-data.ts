@@ -102,7 +102,7 @@ export const mockMap = {
 };
 
 export const mockFieldDetail = {
-  field: { id: defaultFieldId, name: 'Onion field A', areaMu: 300, soilType: 'loam' },
+  field: { id: defaultFieldId, farmId: defaultFarmId, name: 'Onion field A', areaMu: 300, soilType: 'loam' },
   boundary: mockMap.fieldBoundaries[0],
   cropType: 'onion',
   cropStage: 'GROWING',

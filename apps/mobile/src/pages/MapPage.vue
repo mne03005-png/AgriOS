@@ -31,10 +31,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { getDemoHealth } from '../api/demo-api';
 import { createFieldBoundary, importGpsTrack } from '../api/gis-api';
-import { defaultFarmId } from '../api/mock-data';
 import DroneOperationCard from '../components/drone/DroneOperationCard.vue';
 import DemoHeader from '../components/common/DemoHeader.vue';
 import DrawBoundaryTool from '../components/map/DrawBoundaryTool.vue';
@@ -45,6 +44,7 @@ import LayerPanel from '../components/map/LayerPanel.vue';
 import MapToolbar from '../components/map/MapToolbar.vue';
 import { createMapAdapter, type LngLat, type MapAdapter } from '../map-adapters';
 import { mapStore } from '../stores/map.store';
+import { farmStore } from '../stores/farm.store';
 
 const mapEl = ref<HTMLElement | null>(null);
 const selectedDroneOperation = ref<any | null>(null);
@@ -52,10 +52,18 @@ const demoReady = ref(true);
 const hasMapData = computed(() => Boolean((mapStore.mapData.fieldBoundaries ?? []).length || (mapStore.mapData.droneRouteLayers ?? []).length || (mapStore.mapData.droneCoverageLayers ?? []).length));
 let adapter: MapAdapter | null = null;
 
-onMounted(async () => {
-  const health = await getDemoHealth(defaultFarmId);
+async function loadForCurrentFarm() {
+  // Race guard: mirrors CockpitPage/ManagerWorkbenchPage (UX-1D section 31) -- a slower
+  // response for a farm the user has since navigated away from must not overwrite the map.
+  const requestedFarmId = farmStore.currentFarmIdOrDefault;
+  const [health] = await Promise.all([getDemoHealth(requestedFarmId), mapStore.loadMapData(requestedFarmId)]);
+  if (requestedFarmId !== farmStore.currentFarmIdOrDefault) return;
   demoReady.value = Boolean(health.data?.isReady) || health.isMock;
-  await mapStore.loadMapData(defaultFarmId);
+  renderAll();
+}
+
+onMounted(async () => {
+  await loadForCurrentFarm();
   await nextTick();
   await initMap();
   renderAll();
@@ -66,6 +74,10 @@ onBeforeUnmount(() => {
   adapter?.destroy();
   window.removeEventListener('agrios:gps-point', onGpsPoint as EventListener);
 });
+
+// Map respects the shared CURRENT FARM (UX-1D section 23) -- reload when it changes after
+// the initial mount (e.g. a field deep link elsewhere corrected the farm context).
+watch(() => farmStore.currentFarmIdOrDefault, loadForCurrentFarm);
 
 async function initMap() {
   if (!mapEl.value) return;
@@ -188,10 +200,10 @@ async function saveBoundary(name: string) {
     type: 'Polygon',
     coordinates: [[...mapStore.drawingPoints.map((point) => [point.lng, point.lat]), [mapStore.drawingPoints[0].lng, mapStore.drawingPoints[0].lat]]]
   };
-  await createFieldBoundary({ farmId: defaultFarmId, name, source: 'MANUAL_DRAW', coordinateSystem: 'WGS84', polygon });
+  await createFieldBoundary({ farmId: farmStore.currentFarmIdOrDefault, name, source: 'MANUAL_DRAW', coordinateSystem: 'WGS84', polygon });
   mapStore.stopDrawing();
   mapStore.drawingPoints = [];
-  await mapStore.refreshLayers(defaultFarmId);
+  await mapStore.refreshLayers(farmStore.currentFarmIdOrDefault);
   renderAll();
 }
 
@@ -205,9 +217,9 @@ function stopGps() {
 
 async function submitGps(name: string) {
   if (mapStore.gpsTrackPoints.length < 3) return;
-  await importGpsTrack({ farmId: defaultFarmId, name, source: 'MOBILE_GPS', coordinateSystem: 'WGS84', points: mapStore.gpsTrackPoints, closeLoop: true });
+  await importGpsTrack({ farmId: farmStore.currentFarmIdOrDefault, name, source: 'MOBILE_GPS', coordinateSystem: 'WGS84', points: mapStore.gpsTrackPoints, closeLoop: true });
   mapStore.stopGpsRecording();
-  await mapStore.refreshLayers(defaultFarmId);
+  await mapStore.refreshLayers(farmStore.currentFarmIdOrDefault);
   renderAll();
 }
 

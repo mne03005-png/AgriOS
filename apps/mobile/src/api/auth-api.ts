@@ -4,6 +4,10 @@ export type AuthUser = {
   id: string;
   tenantId?: string | null;
   farmId?: string | null;
+  // Backend's /auth/login, /auth/me, /auth/refresh etc. all fetch the User with
+  // `include: { farm: true }` and return it as-is (see AuthService.buildAuthResponse /
+  // .profile), so the farm's real name is already present today -- just not yet typed here.
+  farm?: { id: string; name: string } | null;
   name: string;
   phone?: string;
   email?: string | null;

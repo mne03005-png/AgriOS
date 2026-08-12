@@ -797,6 +797,10 @@ button:disabled {
 .freshness { font-size: 12px; }
 .quick-actions-label { margin-top: 20px; }
 
+/* UX-1D Field Detail: compact scrollable tab row on narrow (mobile) widths */
+.field-tabs { overflow-x: auto; flex-wrap: nowrap; margin: 12px 0; }
+.field-tabs button { flex: 0 0 auto; }
+
 @media (max-width: 767px) {
   html, body, #app { max-width: 100%; overflow-x: hidden; }
   .app-context { align-items: flex-start; font-size: 13px; }

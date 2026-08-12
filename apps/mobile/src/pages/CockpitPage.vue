@@ -72,10 +72,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { getAlerts, getCockpit } from '../api/mobile-api';
 import { getDemoHealth } from '../api/demo-api';
-import { defaultFarmId, mockCockpit, mockAlerts } from '../api/mock-data';
+import { mockCockpit, mockAlerts } from '../api/mock-data';
 import DemoHeader from '../components/common/DemoHeader.vue';
 import FarmStatusHeader from '../components/cockpit/FarmStatusHeader.vue';
 import FarmActivityTimeline from '../components/cockpit/FarmActivityTimeline.vue';
@@ -85,6 +85,7 @@ import QuickActions from '../components/cockpit/QuickActions.vue';
 import StatusBadge from '../components/common/StatusBadge.vue';
 import { translateStatusLabel } from '../services/status-translation';
 import { deriveFieldAttention, formatFreshness } from '../services/home-summary';
+import { farmStore } from '../stores/farm.store';
 
 const data = ref<any>(mockCockpit);
 const alerts = ref<any>(mockAlerts);
@@ -92,14 +93,23 @@ const isMock = ref(true);
 const demoReady = ref(true);
 const lastUpdatedAt = ref<string | null>(null);
 
-onMounted(async () => {
-  const [result, alertsResult, health] = await Promise.all([getCockpit(defaultFarmId), getAlerts(defaultFarmId), getDemoHealth(defaultFarmId)]);
+async function load() {
+  // Race guard: if the user's current farm changes again before this request settles, the
+  // slower/older response must not overwrite the newer farm's data (UX-1D section 31).
+  const requestedFarmId = farmStore.currentFarmIdOrDefault;
+  const [result, alertsResult, health] = await Promise.all([getCockpit(requestedFarmId), getAlerts(requestedFarmId), getDemoHealth(requestedFarmId)]);
+  if (requestedFarmId !== farmStore.currentFarmIdOrDefault) return;
   data.value = result.data;
   alerts.value = alertsResult.data;
   isMock.value = result.isMock;
   lastUpdatedAt.value = result.lastUpdatedAt;
   demoReady.value = Boolean(health.data?.isReady) || health.isMock;
-});
+}
+
+onMounted(load);
+// Farmer Home must reflect the shared CURRENT FARM, not just whatever farm it happened to
+// load first with (UX-1D sections 24/25).
+watch(() => farmStore.currentFarmIdOrDefault, load);
 
 const riskTone = computed(() => String(data.value.todayRiskLevel ?? 'NORMAL').toLowerCase());
 const freshnessLabel = computed(() => formatFreshness(lastUpdatedAt.value));
