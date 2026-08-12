@@ -153,9 +153,15 @@ export class ExecutionResultLinkerService {
     let resultJson: any;
     if (payload.status === 'SUCCESS') {
       const completion = await this.completeFertigationInventory(task.id, plan, payload, firstPayload);
-      if (!completion.applied) return completion.task;
       updated = completion.task;
-      resultJson = updated.resultJson;
+      resultJson = updated?.resultJson;
+      // completion.applied only tells us whether THIS call performed the inventory decrement.
+      // Inventory being already durably applied (physicalCompletionApplied===true) does not mean
+      // the post-commit business side effects below (report/activity/usage/event) have run — a
+      // crash between the inventory transaction's commit and those calls must still be able to
+      // reach them on replay. Only skip entirely if inventory itself was never durably applied
+      // (e.g. task not found / claim lost to a genuinely different in-flight completion).
+      if (resultJson?.physicalCompletionApplied !== true) return updated;
     } else {
       resultJson = {
         ...(task.resultJson ?? {}),
@@ -180,8 +186,36 @@ export class ExecutionResultLinkerService {
     return updated;
   }
 
+  // Empirically validated against an isolated MySQL 8.4 instance under 10-way concurrent
+  // same-tank contention (see R1-D.1 review): the previous fixed 3-immediate-attempt policy
+  // left ~60-70% of legitimate concurrent completions exhausted by real P2034 write-conflict
+  // errors. 8 attempts with capped-exponential, fully-jittered backoff between attempts
+  // eliminates retry exhaustion at that contention level while keeping worst-case added
+  // latency bounded to roughly one second for the least-lucky caller. This is a background
+  // completion path (post-physical-confirmation bookkeeping), not a synchronous user request.
+  private static readonly FERTIGATION_COMPLETION_MAX_ATTEMPTS = 8;
+  private static readonly FERTIGATION_COMPLETION_RETRY_BASE_MS = 20;
+  private static readonly FERTIGATION_COMPLETION_RETRY_CAP_MS = 250;
+
+  private isRetryableTransactionConflict(error: unknown): boolean {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';
+  }
+
+  private getTransactionRetryDelay(attempt: number): number {
+    const exponential = Math.min(
+      ExecutionResultLinkerService.FERTIGATION_COMPLETION_RETRY_CAP_MS,
+      ExecutionResultLinkerService.FERTIGATION_COMPLETION_RETRY_BASE_MS * 2 ** (attempt - 1)
+    );
+    return Math.floor(Math.random() * exponential);
+  }
+
+  private sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   private async completeFertigationInventory(taskId: string, plan: any, payload: any, firstPayload: any) {
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    const maxAttempts = ExecutionResultLinkerService.FERTIGATION_COMPLETION_MAX_ATTEMPTS;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         return await (this.prisma as any).$transaction(async (tx: any) => {
           const current = await tx.fertigationTask.findUnique({ where: { id: taskId } });
@@ -239,7 +273,8 @@ export class ExecutionResultLinkerService {
           return { task: updated, applied: true };
         }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
       } catch (error) {
-        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2034' || attempt === 3) throw error;
+        if (!this.isRetryableTransactionConflict(error) || attempt === maxAttempts) throw error;
+        await this.sleep(this.getTransactionRetryDelay(attempt));
       }
     }
     throw new Error('Fertigation completion transaction retry exhausted');
