@@ -108,7 +108,10 @@ function mobileTabsFor(rawRole) {
   return navigation.workspaceNavigation.filter((item) => permissions.canAccess(item.roles, role));
 }
 test('14 FARMER mobile tabs: normal farm-operation shell', () => {
-  assert.deepEqual(mobileTabsFor('FARMER').map((t) => t.path), ['/cockpit', '/map', '/operations', '/farm-records', '/profile']);
+  // UX-1E consolidated navigation: 农事(/farm-records) was replaced by 告警(/alerts) as a
+  // primary tab; farm-records discovery moved into Operations' 农事记录 tab instead (see
+  // verify-ux1e-domain-navigation.mjs for full coverage of the new shell and the redirect).
+  assert.deepEqual(mobileTabsFor('FARMER').map((t) => t.path), ['/cockpit', '/map', '/operations', '/alerts', '/profile']);
 });
 test('15 MANAGER mobile tabs: same normal farm-operation shell as FARMER', () => {
   assert.deepEqual(mobileTabsFor('FARM_MANAGER').map((t) => t.path), mobileTabsFor('FARMER').map((t) => t.path));
@@ -133,14 +136,17 @@ test('19 AppTabBar.vue source actually implements this selection (not silently d
 // --- Desktop role-aware navigation (section 24) ---
 function desktopNavFor(rawRole) {
   const role = permissions.canonicalRole(rawRole);
-  const combined = [...navigation.primaryNavigation, ...navigation.workspaceNavigation].filter((item) => permissions.canAccess(item.roles, role));
+  // UX-1E: App.vue's real visibleNavigation also folds in desktopSecondaryNavigation (数据/reports).
+  const combined = [...navigation.primaryNavigation, ...navigation.desktopSecondaryNavigation, ...navigation.workspaceNavigation].filter((item) => permissions.canAccess(item.roles, role));
   if (role === 'FARMER' || role === 'MANAGER') return combined;
   const defaultPath = roleNav.getDefaultRouteForRole(role);
   return [...combined].sort((a, b) => Number(b.path === defaultPath) - Number(a.path === defaultPath));
 }
 test('20 FARMER desktop nav: farm-operation only, no workspace entries', () => {
+  // UX-1E: desktop also gains 数据(/reports) via desktopSecondaryNavigation, and
+  // 农事(/farm-records) was replaced by 告警(/alerts) -- see note on test 14.
   const paths = desktopNavFor('FARMER').map((i) => i.path);
-  assert.deepEqual(paths, ['/cockpit', '/map', '/operations', '/farm-records', '/profile']);
+  assert.deepEqual(paths, ['/cockpit', '/map', '/operations', '/alerts', '/profile', '/reports']);
 });
 test('21 MANAGER desktop nav: farm-operation + manager workspace, not engineer/platform', () => {
   const paths = desktopNavFor('FARM_MANAGER').map((i) => i.path);

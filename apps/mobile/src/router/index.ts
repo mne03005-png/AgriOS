@@ -21,7 +21,6 @@ import BluetoothMaintenancePage from '../pages/BluetoothMaintenancePage.vue';
 import DeviceIntegrationPage from '../pages/DeviceIntegrationPage.vue';
 import ValveControlTestPage from '../pages/ValveControlTestPage.vue';
 import ReadOnlyTelemetryPage from '../pages/ReadOnlyTelemetryPage.vue';
-import FarmRecordsPage from '../pages/FarmRecordsPage.vue';
 import ForbiddenPage from '../pages/ForbiddenPage.vue';
 import ManagerWorkbenchPage from '../pages/ManagerWorkbenchPage.vue';
 import EngineerWorkbenchPage from '../pages/EngineerWorkbenchPage.vue';
@@ -62,7 +61,11 @@ export const router = createRouter({
     { path: '/profile', component: ProfilePage },
     { path: '/login', component: LoginPage, meta: { public: true } },
     { path: '/change-password', component: ChangePasswordPage },
-    { path: '/farm-records', component: FarmRecordsPage },
+    // UX-1E compatibility redirect: FarmRecordsPage.vue remains on disk (no speculative
+    // deletion) but is no longer reachable via navigation -- its content/concept now lives in
+    // the Operations 农事记录 tab. Preserves old bookmarks; the visitor's intent (records) is
+    // carried through via ?tab=records rather than dropping them on bare /operations.
+    { path: '/farm-records', redirect: () => ({ path: '/operations', query: { tab: 'records' } }) },
     { path: '/manager', component: ManagerWorkbenchPage, meta: { roles: ['MANAGER', 'SUPER_ADMIN'] } },
     { path: '/engineer', component: EngineerWorkbenchPage, meta: { roles: ['ENGINEER', 'SUPER_ADMIN'] } },
     { path: '/platform', component: SuperAdminPage, meta: { roles: ['SUPER_ADMIN'] } },

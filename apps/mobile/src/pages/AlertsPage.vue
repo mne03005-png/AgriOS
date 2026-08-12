@@ -20,19 +20,27 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { getAlerts } from '../api/mobile-api';
-import { defaultFarmId, mockAlerts } from '../api/mock-data';
+import { mockAlerts } from '../api/mock-data';
 import StatusBadge from '../components/common/StatusBadge.vue';
+import { farmStore } from '../stores/farm.store';
 
 const alerts = ref<any>(mockAlerts);
 const isMock = ref(true);
 const safetyAlerts = computed(() => (Array.isArray(alerts.value) ? alerts.value : alerts.value.safetyAlerts ?? []));
 const anomalies = computed(() => (Array.isArray(alerts.value) ? [] : alerts.value.anomalies ?? []));
 
-onMounted(async () => {
-  const result = await getAlerts(defaultFarmId);
+async function load() {
+  // UX-1E: 告警 is now canonical primary navigation, so it must respect the shared UX-1D
+  // current farm (not the old hardcoded default), with the same race guard used elsewhere.
+  const requestedFarmId = farmStore.currentFarmIdOrDefault;
+  const result = await getAlerts(requestedFarmId);
+  if (requestedFarmId !== farmStore.currentFarmIdOrDefault) return;
   alerts.value = result.data;
   isMock.value = result.isMock;
-});
+}
+
+onMounted(load);
+watch(() => farmStore.currentFarmIdOrDefault, load);
 </script>

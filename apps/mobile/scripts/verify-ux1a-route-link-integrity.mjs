@@ -41,9 +41,14 @@ const dynamicRoutePaths = routePaths.filter((p) => p.includes(':') && !p.include
 const pageBackedCount = routes.filter((r) => r.pageBacked).length;
 const nonPageCount = routes.length - pageBackedCount;
 
+// UX-1E turned /farm-records from a page-backed stub into a compatibility redirect to
+// /operations?tab=records (its content/concept moved into the Operations 农事记录 tab; the
+// old component stays on disk, unreferenced). That is one fewer page-backed route and one
+// more non-page entry than the UX-1A baseline -- updated honestly, not weakened: total route
+// count and "no URL 404s" coverage below are unchanged and still fully enforced.
 assert.equal(routes.length, 30, `expected 30 total route entries (UX-1A baseline), found ${routes.length}`);
-assert.equal(pageBackedCount, 28, `expected 28 page-backed routes (UX-1A baseline), found ${pageBackedCount}`);
-assert.equal(nonPageCount, 2, `expected 2 non-page redirect/catch-all entries (UX-1A baseline), found ${nonPageCount}`);
+assert.equal(pageBackedCount, 27, `expected 27 page-backed routes (UX-1E: /farm-records became a redirect), found ${pageBackedCount}`);
+assert.equal(nonPageCount, 3, `expected 3 non-page redirect/catch-all entries (UX-1E: /, catch-all, and /farm-records), found ${nonPageCount}`);
 
 function resolves(target) {
   if (routePaths.includes(target)) return true;

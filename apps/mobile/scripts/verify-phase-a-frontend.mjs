@@ -11,7 +11,9 @@ const css = read('src/styles/mobile.css');
 const manifest = JSON.parse(read('public/manifest.webmanifest'));
 const sw = read('public/sw.js');
 
-for (const path of ['/cockpit', '/map', '/operations', '/farm-records', '/profile']) assert.match(nav, new RegExp(path.replace('/', '\\/')));
+// UX-1E replaced 农事(/farm-records) with 告警(/alerts) as a primary nav domain; /farm-records
+// remains a compatibility redirect (router/index.ts), not part of navigation.ts anymore.
+for (const path of ['/cockpit', '/map', '/operations', '/alerts', '/profile']) assert.match(nav, new RegExp(path.replace('/', '\\/')));
 for (const role of ['FARMER', 'MANAGER', 'INSTALLER', 'ENGINEER', 'SUPER_ADMIN']) assert.match(read('src/services/permissions.ts'), new RegExp(role));
 assert.match(router, /roles: \['ENGINEER', 'SUPER_ADMIN'\]/);
 assert.match(router, /path: '\/forbidden'/);

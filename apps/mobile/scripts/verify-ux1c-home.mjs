@@ -92,9 +92,14 @@ test('13 renders manager-specific heading/content', () => {
   for (const expected of ['农场状态', '待处理', '快速入口']) assert.match(manager, new RegExp(expected));
 });
 test('14 links to existing manager-relevant workflows that resolve to real registered routes', () => {
+  // UX-1E made 作业(/operations) and 数据(/reports) primary navigation items, one tap away --
+  // ManagerWorkbenchPage's own quick-entry shortcuts to them became duplicate discovery and
+  // were intentionally removed there (see UX-1E section 21; verify-ux1e-domain-navigation.mjs
+  // covers primary-nav reachability). The two approval-queue shortcuts remain genuinely
+  // distinct (still two taps away via 作业 -> 审核) and are still expected here.
   const routesArrayBody = routerSource.match(/routes:\s*\[([\s\S]*?)\n\s*\]\s*\}\);/)[1];
   const routePaths = [...routesArrayBody.matchAll(/path:\s*'([^']*)'/g)].map((m) => m[1]);
-  for (const target of ['/operations', '/reports', '/drone-reviews', '/boundaries/review']) {
+  for (const target of ['/drone-reviews', '/boundaries/review']) {
     assert.match(manager, new RegExp(`to="${target.replace('/', '\\/')}"`), `Manager Home must link to ${target}`);
     assert.ok(routePaths.includes(target), `${target} must still be a real registered route`);
   }

@@ -1,4 +1,5 @@
 import { canonicalRole, type CanonicalRole } from './permissions';
+import type { NavigationItem } from '../config/navigation';
 
 // UX-1B single source of truth for "where does each canonical role land by default."
 // DEFAULT_WORKSPACE_ROUTE is a default, not an access restriction -- it must never be used
@@ -31,4 +32,17 @@ export function isSafeInternalPath(value: unknown): value is string {
 export function resolveLandingRoute(role: string | undefined | null, explicitTarget?: unknown): string {
   if (isSafeInternalPath(explicitTarget)) return explicitTarget;
   return getDefaultRouteForRole(role);
+}
+
+// UX-1E: 首页 in the shared primaryNavigation config is a placeholder pointing at /cockpit.
+// For FARMER that already IS their default landing, so it's a no-op. For MANAGER, whose
+// default landing is /manager, this makes the 首页 tab/link actually go there instead of the
+// literal Farmer Home -- without duplicating a second nav array or hardcoding a role branch
+// into every consumer (AppTabBar.vue, App.vue). INSTALLER/ENGINEER/SUPER_ADMIN are left
+// untouched: they already get their own workspace entry as a separate item, so rewriting
+// their 首页 too would just create a confusing duplicate link to the same destination.
+export function applyRoleAwareHome(items: NavigationItem[], role: CanonicalRole): NavigationItem[] {
+  if (role !== 'FARMER' && role !== 'MANAGER') return items;
+  const homePath = getDefaultRouteForRole(role);
+  return items.map((item) => (item.path === '/cockpit' ? { ...item, path: homePath } : item));
 }

@@ -15,6 +15,7 @@
     ,"test:ux1b-role-navigation": "node scripts/verify-ux1b-role-navigation.mjs"
     ,"test:ux1c-home": "node scripts/verify-ux1c-home.mjs"
     ,"test:ux1d-farm-field-context": "node scripts/verify-ux1d-farm-field-context.mjs"
+    ,"test:ux1e-domain-navigation": "node scripts/verify-ux1e-domain-navigation.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-vue": "^6.0.0",

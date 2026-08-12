@@ -50,6 +50,7 @@ import DemoHeader from '../components/common/DemoHeader.vue';
 import { getHealthReady } from '../api/production-api';
 import { logout, me } from '../api/auth-api';
 import { authStore } from '../stores/auth.store';
+import { canAccess } from '../services/permissions';
 
 const router = useRouter();
 const health = ref<any>({});
@@ -63,7 +64,11 @@ const canExecute = computed(() => {
 const visibleItems = computed(() => {
   const role = authStore.user?.role;
   const isInstaller = ['INSTALLER', 'MAINTAINER', 'TENANT_ADMIN', 'PLATFORM_ADMIN'].includes(role ?? '');
-  return items.filter((item) => !item.installerOnly || isInstaller);
+  // Matches /drone-operations' own route meta (MANAGER/ENGINEER/SUPER_ADMIN) via the
+  // canonical role architecture, rather than extending the legacy raw-role array above --
+  // FARMER previously saw this shortcut despite being unable to open the page.
+  const canSeeDrone = canAccess(['MANAGER', 'ENGINEER', 'SUPER_ADMIN'], authStore.user?.canonicalRole ?? role);
+  return items.filter((item) => (!item.installerOnly || isInstaller) && (!item.roleGated || canSeeDrone));
 });
 
 onMounted(async () => {
@@ -88,14 +93,14 @@ async function logoutCurrent() {
   await router.replace('/login');
 }
 
+// UX-1E: 进入农场驾驶舱(/cockpit)/地图(/map)/告警(/alerts)/农事与设备(/operations) were removed
+// here -- they duplicate the new 首页/田块/告警/作业 primary navigation one tap away. 报表 stays
+// (mobile intentionally has no 数据 bottom tab; 我的 is one of its explicit contextual
+// reachability paths). AI 建议 stays (contextual drill-down, never primary navigation).
 const items = [
-  { label: '进入农场驾驶舱', path: '/cockpit' },
-  { label: '地图', path: '/map' },
-  { label: '农事与设备', path: '/operations' },
-  { label: '告警', path: '/alerts' },
   { label: '报表', path: '/reports' },
-  { label: '无人机作业', path: '/drone-operations' },
   { label: 'AI 建议', path: '/ai' },
+  { label: '无人机作业', path: '/drone-operations', roleGated: true },
   { label: '设备安装验收', path: '/installer-checks', installerOnly: true },
   { label: '真实设备接入调试', path: '/device-integration', installerOnly: true },
   { label: '阀门安全测试', path: '/valve-control-test', installerOnly: true }

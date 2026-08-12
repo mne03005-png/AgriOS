@@ -22,11 +22,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppTabBar from './components/common/AppTabBar.vue';
-import { primaryNavigation, workspaceNavigation } from './config/navigation';
+import { primaryNavigation, desktopSecondaryNavigation, workspaceNavigation } from './config/navigation';
 import { authStore } from './stores/auth.store';
 import { farmStore } from './stores/farm.store';
 import { canonicalRole, canAccess } from './services/permissions';
-import { getDefaultRouteForRole } from './services/role-navigation';
+import { applyRoleAwareHome, getDefaultRouteForRole } from './services/role-navigation';
 import { logout } from './api/auth-api';
 
 const online = ref(navigator.onLine);
@@ -41,15 +41,21 @@ const farmName = computed(() => farmStore.currentFarmName ?? (farmStore.currentF
 // calls farmStore.setCurrentFarm() directly when a field proves a different farm, which is a
 // later, stronger correction this watcher must not fight (it only reacts to identity changes).
 watch(() => authStore.user, () => farmStore.resolveInitialFarm(), { immediate: true });
-// FARMER/MANAGER keep the existing farm-operation-first order (their default landing is
-// already first, /cockpit, or unemphasized, /manager). INSTALLER/ENGINEER/SUPER_ADMIN get
-// their default workspace floated to the top as a "default focus" cue -- access itself is
-// unchanged, this is a stable reorder over the same canAccess-filtered list.
+// UX-1E accepted six-domain desktop shell for FARMER/MANAGER (首页/田块/作业/告警/数据/我的):
+// primaryNavigation (with 首页 resolved to the actual role-aware landing) plus the desktop-
+// only 数据 entry. FARMER/MANAGER keep the existing farm-operation-first order (their default
+// landing is already first). INSTALLER/ENGINEER/SUPER_ADMIN get their default workspace
+// floated to the top as a "default focus" cue -- access itself is unchanged, this is a stable
+// reorder over the same canAccess-filtered list.
 const visibleNavigation = computed(() => {
-  const combined = [...primaryNavigation, ...workspaceNavigation].filter((item) => canAccess(item.roles, role.value));
-  if (role.value === 'FARMER' || role.value === 'MANAGER') return combined;
+  const combined = [...applyRoleAwareHome(primaryNavigation, role.value), ...desktopSecondaryNavigation, ...workspaceNavigation].filter((item) => canAccess(item.roles, role.value));
+  // MANAGER's resolved 首页 now points at the same /manager destination as workspaceNavigation's
+  // own 管理工作台 entry (applyRoleAwareHome above); keep only the first (首页) to avoid two
+  // links to the identical page, consistent with UX-1E's one-canonical-discovery-home principle.
+  const deduped = combined.filter((item, index) => combined.findIndex((other) => other.path === item.path) === index);
+  if (role.value === 'FARMER' || role.value === 'MANAGER') return deduped;
   const defaultPath = getDefaultRouteForRole(role.value);
-  return [...combined].sort((a, b) => Number(b.path === defaultPath) - Number(a.path === defaultPath));
+  return [...deduped].sort((a, b) => Number(b.path === defaultPath) - Number(a.path === defaultPath));
 });
 const updateNetwork = () => { online.value = navigator.onLine; };
 onMounted(() => { window.addEventListener('online', updateNetwork); window.addEventListener('offline', updateNetwork); });

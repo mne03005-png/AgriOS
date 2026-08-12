@@ -46,12 +46,13 @@
       <p v-else class="subtle">暂无待处理告警</p>
     </section>
 
-    <!-- 快速入口 -->
+    <!-- 快速入口: UX-1E removed 作业(/operations)/数据(/reports) shortcuts here -- both are now
+         one tap away via primary navigation, so keeping them was duplicate discovery. The two
+         approval-queue shortcuts stay: they're still two taps away through 作业 -> 审核, so a
+         direct entry point remains genuinely useful, not merely cosmetic. -->
     <section class="panel">
       <div class="panel-title">快速入口</div>
       <div class="workspace-grid">
-        <RouterLink class="panel" to="/operations">作业与审批</RouterLink>
-        <RouterLink class="panel" to="/reports">报表</RouterLink>
         <RouterLink class="panel" to="/drone-reviews">无人机审核</RouterLink>
         <RouterLink class="panel" to="/boundaries/review">边界审核</RouterLink>
       </div>
