@@ -65,12 +65,20 @@ test('8 binding write UI is NOT exposed (no bind-plot/confirm-binding-candidate 
   assert.doesNotMatch(installer, /<button[^>]*>.*绑定.*<\/button>/, 'must not render an active bind action button');
 });
 
-// --- 9: no backend permission widening ---
-test('9 no backend permission widening occurs (installer.controller.ts / iot.controller.ts untouched)', async () => {
+// --- 9: no INSTALLER-specific permission widening ---
+// UX-1G itself made no backend change (verified at the time by IotController having zero
+// @Permissions decorators). A separate, later security closeout (SEC-IOT-1) legitimately closed
+// that exact gap by adding PermissionsGuard/@Permissions(DEVICE_MANAGE) to IotController's
+// identity/binding-mutation cluster. That is a WIDENING-CLOSURE (tightening), not a widening, and
+// it deliberately does NOT grant INSTALLER the new permission -- INSTALLER's own permission list
+// (test 31) has no DEVICE_MANAGE entry, so INSTALLER remains exactly as forbidden from generic IoT
+// binding writes as before. This test now asserts the current, correct, tightened state instead of
+// asserting IotController stayed unmodified forever.
+test('9 no INSTALLER-specific permission widening occurs (installer.controller.ts unchanged; IotController binding writes now require DEVICE_MANAGE, which INSTALLER does not hold)', async () => {
   const installerController = await readSrc('../../backend/src/modules/installer/installer.controller.ts');
   const iotController = await readSrc('../../backend/src/modules/iot/iot.controller.ts');
   assert.match(installerController, /@Permissions\(PERMISSIONS\.INSTALLER_CHECK\)/);
-  assert.doesNotMatch(iotController, /@Permissions\(/, 'IotController must remain unmodified -- no new permission decorator added');
+  assert.match(iotController, /@Permissions\(PERMISSIONS\.DEVICE_MANAGE\)/, 'SEC-IOT-1 must have closed the generic IoT binding-mutation permission gap');
 });
 
 // --- 10-11: 电源/接线 and 网络 use only real existing fields ---
@@ -195,11 +203,17 @@ test('29 binding candidate endpoint is confirmed READ-only (GET), not a mutation
   assert.match(iotController, /@Get\('devices\/binding-candidates'\)/);
   assert.match(iotController, /@Get\('devices\/:id\/binding-candidates'\)/);
 });
-test('30 bind write endpoints exist but carry no role/permission guard (verified: JwtAuthGuard+TenantGuard only, no PermissionsGuard/@Permissions)', async () => {
+// UX-1G's own audit found these write endpoints carried no role/permission guard at the time
+// (JwtAuthGuard+TenantGuard only) -- that finding is what justified keeping Installer's
+// 身份/绑定 step PARTIAL rather than exposing a live bind action. SEC-IOT-1 closed that gap at the
+// backend directly; this test now asserts the fixed state (PermissionsGuard + DEVICE_MANAGE) while
+// still confirming the two write routes it names are the same ones, unrenamed and unremoved.
+test('30 bind write endpoints now require PermissionsGuard + DEVICE_MANAGE (SEC-IOT-1 closed the generic IoT binding-mutation gap UX-1G found)', async () => {
   const iotController = await readSrc('../../backend/src/modules/iot/iot.controller.ts');
   assert.match(iotController, /@Post\('devices\/:id\/bind-plot'\)/);
   assert.match(iotController, /@Post\('devices\/:id\/confirm-binding-candidate'\)/);
-  assert.doesNotMatch(iotController, /PermissionsGuard/, 'IotController must not have gained a PermissionsGuard in this phase (and had none at baseline)');
+  assert.match(iotController, /@UseGuards\(JwtAuthGuard, TenantGuard, PermissionsGuard\)\s*\n\s*@Permissions\(PERMISSIONS\.DEVICE_MANAGE\)\s*\n\s*bindPlot/);
+  assert.match(iotController, /@UseGuards\(JwtAuthGuard, TenantGuard, PermissionsGuard\)\s*\n\s*@Permissions\(PERMISSIONS\.DEVICE_MANAGE\)\s*\n\s*confirmDeviceBindingCandidate/);
 });
 test('31 permission matrix confirms INSTALLER has no dedicated binding permission distinct from other roles (no role-scoped grant exists to infer authorization from)', async () => {
   const matrix = await readSrc('../../backend/src/common/permissions/permission-matrix.ts');

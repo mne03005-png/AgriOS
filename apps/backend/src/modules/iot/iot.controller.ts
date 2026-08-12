@@ -2,6 +2,9 @@ import { Body, Controller, Get, Headers, Param, Patch, Post, Query, UseGuards } 
 import { ApiBadGatewayResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { ListQueryDto } from '../../common/dto/list-query.dto';
 import { TenantGuard } from '../../common/tenant/tenant.guard';
+import { PermissionsGuard } from '../../common/permissions/permissions.guard';
+import { Permissions } from '../../common/permissions/permissions.decorator';
+import { PERMISSIONS } from '../../common/permissions/permission.constants';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { BatchDeadLetterRetryDto } from './dto/batch-dead-letter-retry.dto';
 import { BatchMarkDeadLetterResolvedDto } from './dto/batch-mark-dead-letter-resolved.dto';
@@ -152,14 +155,16 @@ export class IotController {
 
   @ApiOkResponse({ description: 'Query IoT devices' })
   @Get('devices')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   findDevices(@Query() query: ListQueryDto) {
     return this.iotDeviceService.findAll(query);
   }
 
   @ApiOkResponse({ description: 'Query binding candidates for a ThingsBoard identity' })
   @Get('devices/binding-candidates')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   getThingsBoardBindingCandidates(@Query('thingsboardDeviceId') thingsboardDeviceId?: string, @Query('deviceName') deviceName?: string) {
     return this.iotDeviceService.findBindingCandidatesByThingsBoard({ thingsboardDeviceId, deviceName });
   }
@@ -223,7 +228,8 @@ export class IotController {
   @ApiOkResponse({ description: 'Query IoT device detail' })
   @ApiNotFoundResponse({ description: 'Device not found' })
   @Get('devices/:id')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   findDevice(@Param('id') id: string) {
     return this.iotDeviceService.findOne(id);
   }
@@ -231,7 +237,8 @@ export class IotController {
   @ApiOkResponse({ description: 'Query IoT device health' })
   @ApiNotFoundResponse({ description: 'Device not found' })
   @Get('devices/:id/health')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   getDeviceHealth(@Param('id') id: string) {
     return this.iotDeviceService.getHealth(id);
   }
@@ -239,14 +246,16 @@ export class IotController {
   @ApiOkResponse({ description: 'Query IoT device binding candidates' })
   @ApiNotFoundResponse({ description: 'Device not found' })
   @Get('devices/:id/binding-candidates')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   getDeviceBindingCandidates(@Param('id') id: string) {
     return this.iotDeviceService.getBindingCandidates(id);
   }
 
   @ApiOkResponse({ description: 'Link an AgriOS device with a ThingsBoard identity' })
   @Post('devices/:id/link-thingsboard')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_MANAGE)
   linkThingsBoardDevice(@Param('id') id: string, @Body() dto: LinkThingsBoardDeviceDto) {
     return this.iotDeviceService.linkThingsBoardDevice(id, dto);
   }
@@ -254,14 +263,16 @@ export class IotController {
   @ApiOkResponse({ description: 'Confirm an IoT device binding candidate' })
   @ApiNotFoundResponse({ description: 'Device or field not found' })
   @Post('devices/:id/confirm-binding-candidate')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_MANAGE)
   confirmDeviceBindingCandidate(@Param('id') id: string, @Body() dto: ConfirmBindingCandidateDto) {
     return this.iotDeviceService.confirmBindingCandidate(id, dto);
   }
 
   @ApiCreatedResponse({ description: 'Create IoT device' })
   @Post('devices')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_MANAGE)
   createDevice(@Body() dto: CreateIotDeviceDto) {
     return this.iotDeviceService.create(dto);
   }
@@ -269,7 +280,8 @@ export class IotController {
   @ApiOkResponse({ description: 'Update IoT device' })
   @ApiNotFoundResponse({ description: 'Device not found' })
   @Patch('devices/:id')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_MANAGE)
   updateDevice(@Param('id') id: string, @Body() dto: UpdateIotDeviceDto) {
     return this.iotDeviceService.update(id, dto);
   }
@@ -277,7 +289,8 @@ export class IotController {
   @ApiOkResponse({ description: 'Bind IoT device to field' })
   @ApiNotFoundResponse({ description: 'Device or field not found' })
   @Post('devices/:id/bind-plot')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_MANAGE)
   bindPlot(@Param('id') id: string, @Body() dto: BindPlotDto) {
     return this.iotDeviceService.bindPlot(id, dto);
   }
@@ -285,7 +298,8 @@ export class IotController {
   @ApiOkResponse({ description: 'Unbind IoT device from field' })
   @ApiNotFoundResponse({ description: 'Device not found' })
   @Post('devices/:id/unbind-plot')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_MANAGE)
   unbindPlot(@Param('id') id: string) {
     return this.iotDeviceService.unbindPlot(id);
   }

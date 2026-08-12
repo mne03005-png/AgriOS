@@ -87,6 +87,7 @@ export class IotDeviceService {
   create(dto: CreateIotDeviceDto) {
     return (this.prisma as any).device.create({
       data: {
+        tenantId: this.requestContext.getTenantId(),
         name: dto.name,
         code: dto.code ?? dto.name,
         type: dto.deviceType ?? 'SOIL_SENSOR',
@@ -99,7 +100,10 @@ export class IotDeviceService {
     });
   }
 
-  update(id: string, dto: UpdateIotDeviceDto) {
+  async update(id: string, dto: UpdateIotDeviceDto) {
+    const existing = await (this.prisma as any).device.findFirst({ where: this.tenantWhere({ id }) });
+    if (!existing) throw new NotFoundException('IoT device not found');
+
     return (this.prisma as any).device.update({
       where: { id },
       data: {
@@ -116,7 +120,7 @@ export class IotDeviceService {
 
   async bindPlot(id: string, dto: BindPlotDto) {
     const [device, field] = await Promise.all([
-      (this.prisma as any).device.findUnique({ where: { id } }),
+      (this.prisma as any).device.findFirst({ where: this.tenantWhere({ id }) }),
       this.prisma.field.findUnique({ where: { id: dto.plotId } })
     ]);
     if (!device) throw new NotFoundException('IoT device not found');
@@ -137,7 +141,7 @@ export class IotDeviceService {
   }
 
   async unbindPlot(id: string) {
-    const device = await (this.prisma as any).device.findUnique({ where: { id } });
+    const device = await (this.prisma as any).device.findFirst({ where: this.tenantWhere({ id }) });
     if (!device) throw new NotFoundException('IoT device not found');
 
     const updated = await (this.prisma as any).device.update({
@@ -364,7 +368,7 @@ export class IotDeviceService {
 
   async confirmBindingCandidate(id: string, dto: ConfirmBindingCandidateDto) {
     const [device, field] = await Promise.all([
-      (this.prisma as any).device.findUnique({ where: { id }, include: { field: true } }),
+      (this.prisma as any).device.findFirst({ where: this.tenantWhere({ id }), include: { field: true } }),
       this.prisma.field.findUnique({ where: { id: dto.plotId } })
     ]);
     if (!device) throw new NotFoundException('IoT device not found');
@@ -489,7 +493,7 @@ export class IotDeviceService {
   }
 
   async linkThingsBoardDevice(id: string, dto: LinkThingsBoardDeviceDto) {
-    const device = await (this.prisma as any).device.findUnique({ where: { id } });
+    const device = await (this.prisma as any).device.findFirst({ where: this.tenantWhere({ id }) });
     if (!device) throw new NotFoundException('IoT device not found');
 
     const currentStatus = this.objectValue(device.currentStatus) ?? {};
