@@ -69,6 +69,7 @@ const cockpit = await readSrc('../src/pages/CockpitPage.vue');
 const managerPage = await readSrc('../src/pages/ManagerWorkbenchPage.vue');
 const engineerPage = await readSrc('../src/pages/EngineerWorkbenchPage.vue');
 const installerPage = await readSrc('../src/pages/InstallerChecksPage.vue');
+const demoHeader = await readSrc('../src/components/common/DemoHeader.vue');
 
 function setUser(overrides) {
   authStore.user = { id: 'u1', name: 'admin', role: 'PLATFORM_ADMIN', canonicalRole: 'SUPER_ADMIN', ...overrides };
@@ -334,6 +335,41 @@ test('S4 CockpitPage (Farmer Home) and ManagerWorkbenchPage untouched by UX-1H',
   // unambiguous UX-1H-specific signal instead of that ambiguous phrase.
   assert.doesNotMatch(cockpit, /平台模式|platformContextStore|getPlatformMode/);
   assert.doesNotMatch(managerPage, /平台模式|platformContextStore|getPlatformMode/);
+});
+
+// ============ UX-1H closeout: DemoHeader context semantics ============
+test('C1 the old hardcoded "洋葱智慧农场 Demo" farm banner is removed from DemoHeader\'s template', () => {
+  const templateBody = demoHeader.match(/<template>([\s\S]*?)<\/template>/)[1];
+  assert.doesNotMatch(templateBody, /洋葱智慧农场/);
+});
+test('C2 DemoHeader reuses farmStore + the accepted getPlatformMode helper -- no new/duplicate context state', () => {
+  assert.match(demoHeader, /import \{ farmStore \} from '\.\.\/\.\.\/stores\/farm\.store'/);
+  assert.match(demoHeader, /import \{ getPlatformMode \} from '\.\.\/\.\.\/services\/platform-mode'/);
+  for (const forbidden of ['currentFarm =', 'selectedFarm =', 'demoFarm =', 'new stores/', 'platform-context-2']) {
+    assert.doesNotMatch(demoHeader, new RegExp(forbidden.replace(/[[\]]/g, '\\$&')));
+  }
+});
+test('C3 SUPER_ADMIN + /platform + no active farm cannot render a "当前农场" banner (Platform Mode never looks farm-scoped)', () => {
+  const computedBody = demoHeader.match(/const farmContextLabel = computed\(\(\) => \{([\s\S]*?)\n\}\);/)[1];
+  assert.match(computedBody, /if \(mode\.value === 'PLATFORM'\) return null;/);
+});
+test('C4 Farm Operation Mode (and every other role) uses the real farmStore.currentFarmName, never a hardcoded name', () => {
+  const computedBody = demoHeader.match(/const farmContextLabel = computed\(\(\) => \{([\s\S]*?)\n\}\);/)[1];
+  assert.match(computedBody, /if \(farmStore\.currentFarmName\) return `当前农场：\$\{farmStore\.currentFarmName\}`;/);
+});
+test('C5 changing/clearing farm context cannot leave the previous farm name stuck (label is a computed derived live from farmStore, not a cached/local copy)', () => {
+  assert.doesNotMatch(demoHeader, /const farmContextLabel = ref/, 'must be a computed, not a ref that could go stale');
+  assert.match(demoHeader, /const farmContextLabel = computed\(/);
+});
+test('C6 genuine mock/demo fallback (no real farm resolved at all) is honestly labeled 模拟数据, never presented as a real selected farm', () => {
+  const computedBody = demoHeader.match(/const farmContextLabel = computed\(\(\) => \{([\s\S]*?)\n\}\);/)[1];
+  assert.match(computedBody, /模拟数据/);
+  assert.doesNotMatch(computedBody, /洋葱智慧农场/);
+});
+test('C7 no backend/security file touched by this closeout', async () => {
+  const iotController = await readSrc('../../backend/src/modules/iot/iot.controller.ts');
+  assert.match(iotController, /@Permissions\(PERMISSIONS\.PLATFORM_CONTEXT\)\s*\n\s*syncThingsBoardDevices/);
+  assert.match(iotController, /@Permissions\(PERMISSIONS\.PLATFORM_CONTEXT\)\s*\n\s*checkDevicesHealth/);
 });
 
 let passed = 0;
