@@ -33,7 +33,7 @@
       <div v-for="op in activeOperations" :key="op.key" class="list-line">
         <span class="attention-row-main">
           <strong>{{ op.label }}</strong>
-          <StatusBadge :label="op.status" tone="ok" />
+          <StatusBadge :label="op.status" :tone="statusTone(op.status)" />
         </span>
         <span v-if="op.detail" class="subtle">{{ op.detail }}</span>
       </div>
@@ -69,7 +69,7 @@ import { getAlerts, getCockpit } from '../api/mobile-api';
 import { getDroneReviews } from '../api/drone-review-api';
 import { getFieldBoundaries } from '../api/gis-api';
 import { mockCockpit, mockAlerts } from '../api/mock-data';
-import { translateStatusLabel } from '../services/status-translation';
+import { statusTone, translateStatusLabel } from '../services/status-translation';
 import { countFieldsOk, deriveFieldAttention, formatFreshness } from '../services/home-summary';
 import { farmStore } from '../stores/farm.store';
 

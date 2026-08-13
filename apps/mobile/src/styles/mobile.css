@@ -20,16 +20,16 @@
   padding: 16px;
   margin-bottom: 12px;
   color: #fff;
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background:
     radial-gradient(circle at 82% 20%, rgba(34, 197, 94, .34), transparent 34%),
     linear-gradient(135deg, #111827, #14532d 62%, #0f766e);
-  box-shadow: 0 14px 34px rgba(15, 23, 42, .18);
+  box-shadow: var(--shadow-md);
 }
 
 .demo-header h1 {
   margin: 2px 0;
-  font-size: 22px;
+  font-size: var(--text-page-title);
   line-height: 1.15;
 }
 
@@ -59,13 +59,13 @@
   padding: 18px;
   background: linear-gradient(135deg, #0f172a, #123d2a);
   color: #fff;
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
 }
 
 .farm-header h1,
 .section-header h1 {
   margin: 2px 0;
-  font-size: 25px;
+  font-size: var(--text-page-title);
   line-height: 1.15;
 }
 
@@ -78,8 +78,9 @@
 }
 
 .subtle {
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 4px 0 0;
+  font-size: var(--text-meta);
 }
 
 .farm-header .subtle,
@@ -122,9 +123,12 @@
 .map-card,
 .card {
   background: var(--card);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, .08);
+  /* Low elevation only -- cards read as grouped content with a subtle boundary, not floating
+     white boxes stacked on heavy shadows (UX-1I section 6/9). */
+  box-shadow: var(--shadow-sm);
 }
 
 .form-row {
@@ -177,7 +181,8 @@
 }
 
 .panel-title {
-  font-weight: 800;
+  font-size: var(--text-card-title);
+  font-weight: 700;
   margin-bottom: 10px;
 }
 
@@ -192,10 +197,10 @@
   width: 100%;
   min-height: 360px;
   background: #e8f5ee;
-  border: 2px solid #dbeafe;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, .08);
+  box-shadow: var(--shadow-sm);
 }
 
 .mock-map-svg {
@@ -231,7 +236,7 @@
 .layer-pills span {
   padding: 5px 8px;
   background: #e2f7e9;
-  color: #166534;
+  color: var(--agri-green-dark);
   border-radius: 999px;
   font-size: 12px;
 }
@@ -293,6 +298,7 @@
 
 button:disabled {
   opacity: .55;
+  cursor: not-allowed;
 }
 
 .tabbar {
@@ -303,10 +309,16 @@ button:disabled {
   width: min(520px, 100%);
   height: 66px;
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  /* UX-1I fix: was a hardcoded repeat(6, 1fr), a leftover from before UX-1E consolidated the
+     accepted normal shell to exactly 5 tabs (首页/田块/作业/告警/我的) -- that left a visible
+     empty sixth column and compressed the real tabs into 5/6 of the bar width. Sizing columns
+     to the actual rendered tab count works correctly for every role's tab count (5 for
+     FARMER/MANAGER, 1-4 for workspace shells) without hardcoding any specific number again. */
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   background: #fff;
-  border-top: 1px solid #e2e8f0;
-  box-shadow: 0 -10px 30px rgba(15, 23, 42, .08);
+  border-top: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
   z-index: 10;
 }
 
@@ -354,7 +366,15 @@ button:disabled {
 .risk-badge.low,
 .risk-badge.normal {
   background: #dcfce7;
-  color: #166534;
+  color: var(--agri-green-dark);
+}
+
+/* UX-1I addition: a distinct running/active-but-not-alarming tone (blue), for states like
+   RUNNING/EXECUTED that were previously visually indistinguishable from a generic "healthy"
+   green -- additive only, existing callers using ok/warn/danger/muted are unaffected. */
+.status-badge.info {
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 .status-badge.warn,
@@ -396,9 +416,10 @@ button:disabled {
   position: sticky;
   bottom: 78px;
   background: #fff;
-  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   padding: 14px;
-  box-shadow: 0 -8px 28px rgba(15, 23, 42, .18);
+  box-shadow: var(--shadow-md);
 }
 
 .layer-toggle {
@@ -468,7 +489,8 @@ button:disabled {
 .profile-list button {
   justify-content: flex-start;
   background: #fff;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, .06);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
 }
 
 .compact-panel {
@@ -498,7 +520,7 @@ button:disabled {
   justify-content: space-between;
   gap: 10px;
   padding: 8px 0;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border);
 }
 
 .timeline-item {
@@ -526,12 +548,12 @@ button:disabled {
 }
 
 .section-header.compact .subtle {
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .section-header.compact h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--text-section-title);
 }
 
 .status-pill {
@@ -541,7 +563,7 @@ button:disabled {
   padding: 2px 8px;
   border-radius: 999px;
   background: #dcfce7;
-  color: #166534;
+  color: var(--agri-green-dark);
   font-size: 12px;
   font-weight: 800;
 }
@@ -574,29 +596,6 @@ button:disabled {
   color: #0f172a;
 }
 
-.segmented {
-  display: inline-grid;
-  grid-auto-flow: column;
-  gap: 3px;
-  padding: 3px;
-  border-radius: 9px;
-  background: #e2e8f0;
-}
-
-.segmented button {
-  border: 0;
-  border-radius: 7px;
-  padding: 6px 10px;
-  background: transparent;
-  color: #475569;
-  font-weight: 800;
-}
-
-.segmented button.active {
-  background: #fff;
-  color: #0f172a;
-}
-
 .warning-text {
   margin: 8px 0 0;
   color: #b45309;
@@ -617,7 +616,7 @@ button:disabled {
   justify-content: space-between;
   gap: 12px;
   padding: 8px 0;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border);
 }
 
 .status-row strong {
@@ -644,7 +643,7 @@ button:disabled {
   overflow: auto;
   margin: 0;
   padding: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   border-radius: 8px;
   background: #f8fafc;
   color: #0f172a;
@@ -669,7 +668,7 @@ button:disabled {
 .list-line {
   display: block;
   padding: 8px 0;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border);
   color: #0f172a;
 }
 
@@ -689,7 +688,7 @@ button:disabled {
   gap: 12px;
   align-items: center;
   padding: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   border-radius: 10px;
   color: #0f172a;
   text-decoration: none;
@@ -728,7 +727,7 @@ button:disabled {
 .device-row small,
 .trend-row span {
   display: block;
-  color: #667085;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -754,20 +753,23 @@ button:disabled {
   display: inline-flex;
   gap: 4px;
   padding: 4px;
-  border: 1px solid rgba(27, 38, 49, 0.12);
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 .segmented button {
   min-width: 56px;
+  min-height: 34px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 6px 10px;
   background: transparent;
+  color: var(--text-secondary);
+  font-weight: 700;
 }
 
 .segmented button.active {
-  background: #173b33;
+  background: var(--agri-green);
   color: #fff;
 }
 
@@ -779,7 +781,7 @@ button:disabled {
 }
 
 .empty-state {
-  color: #667085;
+  color: var(--text-secondary);
   padding: 12px 0;
 }
 
@@ -788,7 +790,7 @@ button:disabled {
 .app-context > div, .context-status { display: flex; align-items: center; gap: 12px; }
 .app-context a, .text-button { color: #fff; background: transparent; border: 0; }
 .context-farm { margin-left: 12px; font-size: 13px; opacity: .85; }
-.network-dot { padding: 3px 8px; border-radius: 999px; background: #166534; font-size: 12px; }
+.network-dot { padding: 3px 8px; border-radius: 999px; background: var(--agri-green-dark); font-size: 12px; }
 .network-dot.offline { background: #991b1b; }
 .desktop-nav { display: none; }
 .workspace-grid { display: grid; gap: 14px; }
@@ -830,7 +832,7 @@ button:disabled {
   .app-context { grid-column: 1 / -1; }
   .desktop-nav { display: flex; grid-column: 1; grid-row: 2; flex-direction: column; gap: 4px; padding: 18px 12px; background: #fff; border-right: 1px solid #dbe5dc; }
   .desktop-nav a { min-height: 42px; padding: 10px 12px; border-radius: 8px; color: #24352a; text-decoration: none; }
-  .desktop-nav a.router-link-active { color: #fff; background: #166534; }
+  .desktop-nav a.router-link-active { color: #fff; background: var(--agri-green-dark); }
   .app-main { grid-column: 2; grid-row: 2; width: 100%; max-width: 1600px; padding: 24px 32px; }
   .tabbar { display: none; }
   .workspace-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }

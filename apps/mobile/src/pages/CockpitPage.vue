@@ -37,7 +37,7 @@
       <div v-for="op in activeOperations" :key="op.key" class="list-line">
         <span class="attention-row-main">
           <strong>{{ op.label }}</strong>
-          <StatusBadge :label="op.status" tone="ok" />
+          <StatusBadge :label="op.status" :tone="statusTone(op.status)" />
         </span>
         <span v-if="op.detail" class="subtle">{{ op.detail }}</span>
       </div>
@@ -83,7 +83,7 @@ import MiniFarmMap from '../components/cockpit/MiniFarmMap.vue';
 import AIRecommendationCard from '../components/cockpit/AIRecommendationCard.vue';
 import QuickActions from '../components/cockpit/QuickActions.vue';
 import StatusBadge from '../components/common/StatusBadge.vue';
-import { translateStatusLabel } from '../services/status-translation';
+import { statusTone, translateStatusLabel } from '../services/status-translation';
 import { deriveFieldAttention, formatFreshness } from '../services/home-summary';
 import { farmStore } from '../stores/farm.store';
 

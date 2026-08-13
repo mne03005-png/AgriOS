@@ -36,3 +36,42 @@ export function translateStatusLabel(raw?: string | null): string {
   if (!raw) return '未知';
   return statusLabels[raw] ?? raw;
 }
+
+// UX-1I: a visual-tone counterpart to translateStatusLabel() -- maps the SAME existing status
+// codes to a StatusBadge tone instead of inventing new codes or changing business meaning.
+// Callers that previously hardcoded a single tone (e.g. tone="ok") for every status in a list
+// regardless of actual value are the specific "vague mapping" this exists to fix (UX-1I section
+// 11). Unmapped/unknown codes fall back to 'muted', never silently to 'ok'.
+const statusTones: Record<string, 'ok' | 'info' | 'warn' | 'danger' | 'muted'> = {
+  NORMAL: 'ok',
+  RUNNING: 'info',
+  QUEUED: 'muted',
+  PENDING: 'warn',
+  PENDING_APPROVAL: 'warn',
+  EXECUTED: 'ok',
+  ACKED: 'ok',
+  SUCCESS: 'ok',
+  FAILED: 'danger',
+  FINISHED: 'ok',
+  OUTCOME_UNKNOWN: 'warn',
+  FEEDBACK_PENDING: 'info',
+  FEEDBACK_TIMEOUT: 'warn',
+  FEEDBACK_MISMATCH: 'danger',
+  OFFLINE: 'muted',
+  UNKNOWN: 'muted',
+  CANDIDATE: 'warn',
+  APPROVED: 'ok',
+  REJECTED: 'danger',
+  OPEN: 'warn',
+  REVIEW: 'warn',
+  LOW: 'ok',
+  MEDIUM: 'warn',
+  HIGH: 'warn',
+  CRITICAL: 'danger',
+  ANOMALY: 'danger'
+};
+
+export function statusTone(raw?: string | null): 'ok' | 'info' | 'warn' | 'danger' | 'muted' {
+  if (!raw) return 'muted';
+  return statusTones[raw] ?? 'muted';
+}
