@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { DeviceModule } from '../device/device.module';
 import { DeviceControlModule } from '../device-control/device-control.module';
 import { ExecutionModule } from '../execution/execution.module';
@@ -12,7 +13,7 @@ import { FieldStateEngineService } from './field-state-engine.service';
 import { StrategyEngineService } from './strategy-engine.service';
 
 @Module({
-  imports: [DeviceModule, DeviceControlModule, ExecutionModule, SafetyModule, WettingSimulationModule],
+  imports: [AuthModule, DeviceModule, DeviceControlModule, ExecutionModule, SafetyModule, WettingSimulationModule],
   controllers: [DecisionEngineController],
   providers: [ActionExecutorService, ActionPlannerService, DecisionEngineService, FieldStateEngineService, StrategyEngineService],
   exports: [DecisionEngineService, FieldStateEngineService, StrategyEngineService, ActionPlannerService, ActionExecutorService]

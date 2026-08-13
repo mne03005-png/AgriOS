@@ -40,6 +40,7 @@
     ,"test:r1c-errors": "ts-node scripts/verify-r1c-structured-errors.ts"
     ,"test:r1d-inventory": "ts-node scripts/verify-r1d-fertigation-inventory.ts"
     ,"test:r1d1-completion-reliability": "ts-node scripts/verify-r1d1-fertigation-completion-reliability.ts"
+    ,"test:auth-module-wiring": "ts-node scripts/verify-auth-module-wiring.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

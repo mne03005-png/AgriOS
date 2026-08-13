@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
 import { ActionPlanner } from './planner/action.planner';
 import { DecisionController } from './decision.controller';
 import { DecisionService } from './decision.service';
@@ -7,6 +8,7 @@ import { StateService } from './state/state.service';
 import { StrategySelector } from './strategy/strategy.selector';
 
 @Module({
+  imports: [AuthModule],
   controllers: [DecisionController],
   providers: [ActionPlanner, DecisionService, OptimizerService, StateService, StrategySelector],
   exports: [DecisionService]
