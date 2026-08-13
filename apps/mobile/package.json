@@ -18,6 +18,7 @@
     ,"test:ux1e-domain-navigation": "node scripts/verify-ux1e-domain-navigation.mjs"
     ,"test:ux1f-engineer-workspace": "node scripts/verify-ux1f-engineer-workspace.mjs"
     ,"test:ux1g-installer-workspace": "node scripts/verify-ux1g-installer-workspace.mjs"
+    ,"test:ux1h-platform-mode": "node scripts/verify-ux1h-platform-mode.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-vue": "^6.0.0",
