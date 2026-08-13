@@ -3,11 +3,9 @@
     <header class="app-context">
       <div><strong>AgriOS</strong><span class="context-farm">{{ contextLabel }}</span></div>
       <div class="context-status">
-        <span :class="['network-dot', { offline: !online }]">{{ online ? '在线' : '离线' }}</span>
-        <span>{{ role }}</span>
+        <span :class="['network-dot', { offline: !online }]" :title="online ? '在线' : '离线'">{{ online ? '在线' : '离线' }}</span>
         <RouterLink v-if="mode === 'FARM_OPERATION'" to="/platform">返回平台模式</RouterLink>
-        <RouterLink to="/alerts">告警</RouterLink>
-        <button v-if="authStore.isLoggedIn" class="text-button" @click="signOut">退出</button>
+        <RouterLink v-if="showHeaderAlerts" to="/alerts">告警</RouterLink>
       </div>
     </header>
     <aside class="desktop-nav" aria-label="桌面导航">
@@ -30,7 +28,6 @@ import { platformContextStore } from './stores/platform-context.store';
 import { getPlatformMode } from './services/platform-mode';
 import { canonicalRole, canAccess } from './services/permissions';
 import { applyRoleAwareHome, getDefaultRouteForRole } from './services/role-navigation';
-import { logout } from './api/auth-api';
 import { getFarmById } from './api/farm-api';
 import { getTenantById } from './api/tenant-api';
 
@@ -53,6 +50,16 @@ const contextLabel = computed(() => {
     return `农场运营 · ${tenantLabel} / ${farmName.value}`;
   }
   return farmName.value;
+});
+// UX-HOTFIX-1: the header's 告警 shortcut is redundant clutter for any role that already has
+// 告警 in its bottom/primary navigation (FARMER, MANAGER, and SUPER_ADMIN while operating a
+// farm all reuse primaryNavigation, which includes it -- see config/navigation.ts). It stays
+// genuinely useful only for INSTALLER/ENGINEER and SUPER_ADMIN's Platform Mode, whose
+// workspaceNavigation shell has no alerts entry at all.
+const showHeaderAlerts = computed(() => {
+  if (role.value === 'FARMER' || role.value === 'MANAGER') return false;
+  if (role.value === 'SUPER_ADMIN' && mode.value === 'FARM_OPERATION') return false;
+  return true;
 });
 // Fires on initial mount (session restoration) and on every authStore.user reference change
 // (fresh login via setSession, refreshed profile via setUser, logout via clear() -> null).
@@ -124,5 +131,4 @@ const visibleNavigation = computed(() => {
 const updateNetwork = () => { online.value = navigator.onLine; };
 onMounted(() => { window.addEventListener('online', updateNetwork); window.addEventListener('offline', updateNetwork); });
 onBeforeUnmount(() => { window.removeEventListener('online', updateNetwork); window.removeEventListener('offline', updateNetwork); });
-async function signOut() { if (authStore.token) await logout(authStore.token); authStore.clear(); location.assign('/login'); }
 </script>

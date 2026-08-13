@@ -69,7 +69,6 @@ const cockpit = await readSrc('../src/pages/CockpitPage.vue');
 const managerPage = await readSrc('../src/pages/ManagerWorkbenchPage.vue');
 const engineerPage = await readSrc('../src/pages/EngineerWorkbenchPage.vue');
 const installerPage = await readSrc('../src/pages/InstallerChecksPage.vue');
-const demoHeader = await readSrc('../src/components/common/DemoHeader.vue');
 
 function setUser(overrides) {
   authStore.user = { id: 'u1', name: 'admin', role: 'PLATFORM_ADMIN', canonicalRole: 'SUPER_ADMIN', ...overrides };
@@ -337,34 +336,41 @@ test('S4 CockpitPage (Farmer Home) and ManagerWorkbenchPage untouched by UX-1H',
   assert.doesNotMatch(managerPage, /平台模式|platformContextStore|getPlatformMode/);
 });
 
-// ============ UX-1H closeout: DemoHeader context semantics ============
-test('C1 the old hardcoded "洋葱智慧农场 Demo" farm banner is removed from DemoHeader\'s template', () => {
-  const templateBody = demoHeader.match(/<template>([\s\S]*?)<\/template>/)[1];
-  assert.doesNotMatch(templateBody, /洋葱智慧农场/);
+// ============ UX-HOTFIX-1: App.vue absorbed DemoHeader's context semantics ============
+// DemoHeader.vue (and its farmContextLabel computed) was removed by UX-HOTFIX-1 -- it was a
+// second, redundant header rendered on every page underneath App.vue's own header, and the
+// literal source of the banned "农业版特斯拉中控屏" wording. App.vue's own contextLabel/farmName
+// computeds are now the single header context source; these tests were rewritten to assert the
+// same semantic guarantees (no hardcoded fake farm banner, no stale/ref-cached label, Platform
+// Mode never looks farm-scoped, no fabricated farm name) against the surviving implementation.
+test('C1 no hardcoded fake farm banner text in App.vue\'s header template', () => {
+  const templateBody = appVue.match(/<template>([\s\S]*?)<\/template>/)[1];
+  assert.doesNotMatch(templateBody, /洋葱智慧农场|农业版特斯拉中控屏/);
 });
-test('C2 DemoHeader reuses farmStore + the accepted getPlatformMode helper -- no new/duplicate context state', () => {
-  assert.match(demoHeader, /import \{ farmStore \} from '\.\.\/\.\.\/stores\/farm\.store'/);
-  assert.match(demoHeader, /import \{ getPlatformMode \} from '\.\.\/\.\.\/services\/platform-mode'/);
+test('C2 App.vue reuses farmStore + the accepted getPlatformMode helper -- no new/duplicate context state', () => {
+  assert.match(appVue, /import \{ farmStore \} from '\.\/stores\/farm\.store'/);
+  assert.match(appVue, /import \{ getPlatformMode \} from '\.\/services\/platform-mode'/);
   for (const forbidden of ['currentFarm =', 'selectedFarm =', 'demoFarm =', 'new stores/', 'platform-context-2']) {
-    assert.doesNotMatch(demoHeader, new RegExp(forbidden.replace(/[[\]]/g, '\\$&')));
+    assert.doesNotMatch(appVue, new RegExp(forbidden.replace(/[[\]]/g, '\\$&')));
   }
 });
-test('C3 SUPER_ADMIN + /platform + no active farm cannot render a "当前农场" banner (Platform Mode never looks farm-scoped)', () => {
-  const computedBody = demoHeader.match(/const farmContextLabel = computed\(\(\) => \{([\s\S]*?)\n\}\);/)[1];
-  assert.match(computedBody, /if \(mode\.value === 'PLATFORM'\) return null;/);
+test('C3 SUPER_ADMIN + /platform + no active farm cannot render a farm-scoped banner (Platform Mode never looks farm-scoped)', () => {
+  const computedBody = appVue.match(/const contextLabel = computed\(\(\) => \{([\s\S]*?)\n\}\);/)[1];
+  assert.match(computedBody, /if \(mode\.value === 'PLATFORM'\) return '平台模式';/);
 });
 test('C4 Farm Operation Mode (and every other role) uses the real farmStore.currentFarmName, never a hardcoded name', () => {
-  const computedBody = demoHeader.match(/const farmContextLabel = computed\(\(\) => \{([\s\S]*?)\n\}\);/)[1];
-  assert.match(computedBody, /if \(farmStore\.currentFarmName\) return `当前农场：\$\{farmStore\.currentFarmName\}`;/);
+  const farmNameBody = appVue.match(/const farmName = computed\(\(\) => ([^;]+);/)[1];
+  assert.match(farmNameBody, /farmStore\.currentFarmName/);
 });
 test('C5 changing/clearing farm context cannot leave the previous farm name stuck (label is a computed derived live from farmStore, not a cached/local copy)', () => {
-  assert.doesNotMatch(demoHeader, /const farmContextLabel = ref/, 'must be a computed, not a ref that could go stale');
-  assert.match(demoHeader, /const farmContextLabel = computed\(/);
+  assert.doesNotMatch(appVue, /const (contextLabel|farmName) = ref/, 'must be a computed, not a ref that could go stale');
+  assert.match(appVue, /const contextLabel = computed\(/);
+  assert.match(appVue, /const farmName = computed\(/);
 });
-test('C6 genuine mock/demo fallback (no real farm resolved at all) is honestly labeled 模拟数据, never presented as a real selected farm', () => {
-  const computedBody = demoHeader.match(/const farmContextLabel = computed\(\(\) => \{([\s\S]*?)\n\}\);/)[1];
-  assert.match(computedBody, /模拟数据/);
-  assert.doesNotMatch(computedBody, /洋葱智慧农场/);
+test('C6 genuine no-farm-resolved state is honestly labeled, never presented as a fabricated real farm', () => {
+  const farmNameBody = appVue.match(/const farmName = computed\(\(\) => ([^;]+);/)[1];
+  assert.match(farmNameBody, /请选择农场/);
+  assert.doesNotMatch(farmNameBody, /洋葱智慧农场/);
 });
 test('C7 no backend/security file touched by this closeout', async () => {
   const iotController = await readSrc('../../backend/src/modules/iot/iot.controller.ts');

@@ -1,10 +1,8 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <div v-if="isMock" class="mock-banner">当前为模拟地块数据</div>
     <header class="section-header">
       <div>
-        <p class="eyebrow">Field Detail</p>
         <h1>{{ detail.field?.name ?? '田块详情' }}</h1>
         <p class="subtle">{{ detail.cropType ?? '--' }} · {{ detail.field?.areaMu ?? '-' }} 亩</p>
       </div>
@@ -113,7 +111,7 @@
       <section class="panel">
         <div class="panel-title">无人机作业记录</div>
         <p v-for="item in detail.droneOperationRecords ?? []" :key="item.id" class="list-line">
-          {{ item.operationType }} · {{ percent(item.coverageRate) }}
+          {{ translateStatusLabel(item.operationType) }} · {{ percent(item.coverageRate) }}
         </p>
         <p v-if="!(detail.droneOperationRecords ?? []).length" class="subtle">暂无无人机作业记录</p>
       </section>
@@ -128,7 +126,6 @@ import { controlValve, getAlerts, getFieldDetail } from '../api/mobile-api';
 import { getFarmById } from '../api/farm-api';
 import { defaultFieldId, mockFieldDetail } from '../api/mock-data';
 import DecisionExplanationCard from '../components/ai/DecisionExplanationCard.vue';
-import DemoHeader from '../components/common/DemoHeader.vue';
 import StatusBadge from '../components/common/StatusBadge.vue';
 import ValveControlPanel from '../components/control/ValveControlPanel.vue';
 import { apiErrorMessage } from '../api/api-error';

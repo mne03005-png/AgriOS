@@ -1,6 +1,5 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <div v-if="hasFallback" class="mock-banner">
       Demo fallback：部分生产接口暂时使用演示数据。已登录时会优先调用真实 API；若接口返回 401/403 或其他错误，请查看下方接口错误。
     </div>
@@ -117,7 +116,6 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import DemoHeader from '../components/common/DemoHeader.vue';
 import { defaultFarmId } from '../api/mock-data';
 import {
   getAIRecommendationList,

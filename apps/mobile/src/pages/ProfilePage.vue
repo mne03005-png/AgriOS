@@ -1,11 +1,9 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <header class="section-header">
       <div>
-        <p class="eyebrow">Profile</p>
         <h1>我的</h1>
-        <p class="subtle">账号、租户、农场和生产安全状态。</p>
+        <p class="subtle">账号、农场与安全状态。</p>
       </div>
     </header>
 
@@ -19,41 +17,54 @@
       <RouterLink class="primary-button" to="/login">去登录</RouterLink>
     </section>
 
-    <section v-else class="card">
-      <p class="eyebrow">Auth</p>
-      <h2>{{ authStore.user?.name }}</h2>
-      <p class="subtle">role={{ authStore.user?.role }}</p>
-      <p class="subtle">tenantId={{ authStore.user?.tenantId ?? '-' }}</p>
-      <p class="subtle">farmId={{ authStore.user?.farmId ?? '-' }}</p>
-      <p class="subtle">当前控制模式：{{ health.deviceControlMode ?? 'MOCK' }}</p>
-      <div class="button-row">
-        <RouterLink class="primary-button" to="/change-password">修改密码</RouterLink>
-        <button class="ghost-button" @click="logoutCurrent">退出登录</button>
-      </div>
-    </section>
+    <template v-else>
+      <!-- 身份卡片: name + localized role + current farm only -- never a raw role/tenant/farm code -->
+      <section class="card">
+        <h2>{{ authStore.user?.name }}</h2>
+        <p class="subtle">{{ roleLabel(authStore.user?.canonicalRole ?? authStore.user?.role) }}</p>
+        <p v-if="farmStore.currentFarmName" class="subtle">当前农场：{{ farmStore.currentFarmName }}</p>
+      </section>
 
-    <section v-if="authStore.isLoggedIn && !canExecute" class="panel">
-      <div class="panel-title">权限提示</div>
-      <p class="warning-text">当前角色无权执行高风险动作。设备控制必须经过安全策略、审批和审计。</p>
-    </section>
+      <section v-if="!canExecute" class="panel">
+        <div class="panel-title">权限提示</div>
+        <p class="warning-text">当前角色无权执行高风险动作。设备控制必须经过安全策略、审批和审计。</p>
+      </section>
 
-    <section v-if="authStore.isLoggedIn" class="profile-list">
-      <RouterLink v-for="item in visibleItems" :key="item.label" :to="item.path">{{ item.label }}</RouterLink>
-    </section>
+      <section class="panel">
+        <div class="panel-title">农场与账号</div>
+        <div class="profile-list">
+          <RouterLink to="/change-password">修改密码</RouterLink>
+        </div>
+      </section>
+
+      <section v-if="toolItems.length" class="panel">
+        <div class="panel-title">农场数据与工具</div>
+        <div class="profile-list">
+          <RouterLink v-for="item in toolItems" :key="item.label" :to="item.path">{{ item.label }}</RouterLink>
+        </div>
+      </section>
+
+      <section v-if="installerItems.length" class="panel">
+        <div class="panel-title">安装与工程</div>
+        <div class="profile-list">
+          <RouterLink v-for="item in installerItems" :key="item.label" :to="item.path">{{ item.label }}</RouterLink>
+        </div>
+      </section>
+
+      <button class="ghost-button link-button" @click="logoutCurrent">退出登录</button>
+    </template>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import DemoHeader from '../components/common/DemoHeader.vue';
-import { getHealthReady } from '../api/production-api';
 import { logout, me } from '../api/auth-api';
 import { authStore } from '../stores/auth.store';
-import { canAccess } from '../services/permissions';
+import { farmStore } from '../stores/farm.store';
+import { canAccess, roleLabel } from '../services/permissions';
 
 const router = useRouter();
-const health = ref<any>({});
 const loading = ref(true);
 
 const canExecute = computed(() => {
@@ -61,14 +72,19 @@ const canExecute = computed(() => {
   return ['PLATFORM_ADMIN', 'TENANT_ADMIN', 'FARM_MANAGER', 'MAINTAINER'].includes(role ?? '');
 });
 
-const visibleItems = computed(() => {
+// UX-HOTFIX-1: 我的 is a personal/account page, not a second navigation home -- 首页/田块/作业/
+// 告警 (and their UX-1E synonyms 进入农场驾驶舱/地图) are never listed here, only genuine
+// capabilities with no home in the 5-item bottom navigation (报表/AI 建议/无人机作业 -- carried
+// over unchanged from UX-1E's own dedup pass) and installer-only diagnostic tools.
+const toolItems = computed(() => {
+  const canSeeDrone = canAccess(['MANAGER', 'ENGINEER', 'SUPER_ADMIN'], authStore.user?.canonicalRole ?? authStore.user?.role);
+  return baseTools.filter((item) => !item.roleGated || canSeeDrone);
+});
+
+const installerItems = computed(() => {
   const role = authStore.user?.role;
   const isInstaller = ['INSTALLER', 'MAINTAINER', 'TENANT_ADMIN', 'PLATFORM_ADMIN'].includes(role ?? '');
-  // Matches /drone-operations' own route meta (MANAGER/ENGINEER/SUPER_ADMIN) via the
-  // canonical role architecture, rather than extending the legacy raw-role array above --
-  // FARMER previously saw this shortcut despite being unable to open the page.
-  const canSeeDrone = canAccess(['MANAGER', 'ENGINEER', 'SUPER_ADMIN'], authStore.user?.canonicalRole ?? role);
-  return items.filter((item) => (!item.installerOnly || isInstaller) && (!item.roleGated || canSeeDrone));
+  return isInstaller ? installerTools : [];
 });
 
 onMounted(async () => {
@@ -77,8 +93,6 @@ onMounted(async () => {
       const profile = await me(authStore.token);
       authStore.setUser(profile.user);
     }
-    const result = await getHealthReady();
-    health.value = result.data;
   } catch {
     authStore.clear();
   } finally {
@@ -93,16 +107,14 @@ async function logoutCurrent() {
   await router.replace('/login');
 }
 
-// UX-1E: 进入农场驾驶舱(/cockpit)/地图(/map)/告警(/alerts)/农事与设备(/operations) were removed
-// here -- they duplicate the new 首页/田块/告警/作业 primary navigation one tap away. 报表 stays
-// (mobile intentionally has no 数据 bottom tab; 我的 is one of its explicit contextual
-// reachability paths). AI 建议 stays (contextual drill-down, never primary navigation).
-const items = [
+const baseTools = [
   { label: '报表', path: '/reports' },
   { label: 'AI 建议', path: '/ai' },
-  { label: '无人机作业', path: '/drone-operations', roleGated: true },
-  { label: '设备安装验收', path: '/installer-checks', installerOnly: true },
-  { label: '真实设备接入调试', path: '/device-integration', installerOnly: true },
-  { label: '阀门安全测试', path: '/valve-control-test', installerOnly: true }
+  { label: '无人机作业', path: '/drone-operations', roleGated: true }
+];
+const installerTools = [
+  { label: '设备安装验收', path: '/installer-checks' },
+  { label: '真实设备接入调试', path: '/device-integration' },
+  { label: '阀门安全测试', path: '/valve-control-test' }
 ];
 </script>

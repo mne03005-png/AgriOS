@@ -13,7 +13,7 @@
       <div class="section-header compact"><h2>灌溉异常</h2></div>
       <article class="panel alert-card" v-for="item in anomalies" :key="item.id">
         <div class="card-topline"><strong>{{ item.message }}</strong><StatusBadge :label="item.type ?? 'ANOMALY'" tone="warn" /></div>
-        <p class="subtle">压力、流量、水泵、水箱和阀门检查均由后端生成。</p>
+        <p class="subtle">系统根据压力、流量、水泵、水箱和阀门数据自动生成。</p>
       </article>
     </section>
   </section>

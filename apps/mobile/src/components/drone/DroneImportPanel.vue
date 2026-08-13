@@ -1,16 +1,16 @@
 <template>
   <section class="panel drone-import-panel">
     <div class="card-topline">
-      <strong>Drone Import</strong>
+      <strong>无人机作业导入</strong>
       <div class="segmented">
-        <button type="button" :class="{ active: mode === 'file' }" @click="mode = 'file'">File</button>
+        <button type="button" :class="{ active: mode === 'file' }" @click="mode = 'file'">文件</button>
         <button type="button" :class="{ active: mode === 'json' }" @click="mode = 'json'">JSON</button>
       </div>
     </div>
 
     <div v-if="mode === 'file'" class="form-grid">
-      <input v-model="form.farmId" placeholder="farmId" />
-      <input v-model="form.fieldId" placeholder="fieldId optional" />
+      <input v-model="form.farmId" placeholder="农场编号" />
+      <input v-model="form.fieldId" placeholder="田块编号（可选）" />
       <select v-model="form.source">
         <option>DJI_SMARTFARM</option>
         <option>DJI_TERRA</option>
@@ -20,35 +20,35 @@
         <option>CSV</option>
       </select>
       <select v-model="form.operationType">
-        <option>SPRAYING</option>
-        <option>MAPPING</option>
-        <option>SCOUTING</option>
-        <option>SPREADING</option>
-        <option>SEEDING</option>
+        <option value="SPRAYING">喷洒</option>
+        <option value="MAPPING">测绘</option>
+        <option value="SCOUTING">巡田</option>
+        <option value="SPREADING">撒播</option>
+        <option value="SEEDING">播种</option>
       </select>
-      <input v-model="form.droneModel" placeholder="DJI Agras T50" />
-      <input v-model="form.chemicalName" placeholder="chemical or fertilizer" />
-      <input v-model="form.sprayVolumeL" placeholder="spray volume L" inputmode="decimal" />
+      <input v-model="form.droneModel" placeholder="无人机型号，例如 DJI Agras T50" />
+      <input v-model="form.chemicalName" placeholder="药剂或肥料名称" />
+      <input v-model="form.sprayVolumeL" placeholder="喷施用量（升）" inputmode="decimal" />
       <input type="file" accept=".kml,.geojson,.json,.csv,.kmz,.zip,.tif,.tiff,.tfw" @change="onFileChange" />
-      <button class="icon-button" type="button" @click="submitFile">Upload</button>
+      <button class="icon-button" type="button" @click="submitFile">上传</button>
     </div>
 
     <template v-else>
       <textarea v-model="text" class="json-input" spellcheck="false"></textarea>
-      <button class="icon-button wide" type="button" @click="submitJson">Import JSON</button>
+      <button class="icon-button wide" type="button" @click="submitJson">导入 JSON</button>
     </template>
 
     <p v-if="message" class="subtle">{{ message }}</p>
     <div v-if="lastResult" class="import-result">
       <div class="metric-grid tight">
-        <div class="metric-card"><span>Job</span><strong>{{ lastResult.importJob?.status ?? '--' }}</strong></div>
-        <div class="metric-card"><span>Status</span><strong>{{ lastResult.operation?.status ?? '--' }}</strong></div>
-        <div class="metric-card"><span>Area</span><strong>{{ format(lastResult.operation?.actualAreaMu) }} mu</strong></div>
-        <div class="metric-card"><span>Coverage</span><strong>{{ percent(lastResult.operation?.coverageRate) }}</strong></div>
-        <div class="metric-card"><span>Route</span><strong>{{ format(lastResult.operation?.flightDistanceM) }} m</strong></div>
-        <div class="metric-card"><span>Layers</span><strong>{{ lastResult.mapLayers?.length ?? 0 }}</strong></div>
+        <div class="metric-card"><span>任务</span><strong>{{ translateStatusLabel(lastResult.importJob?.status ?? '--') }}</strong></div>
+        <div class="metric-card"><span>状态</span><strong>{{ translateStatusLabel(lastResult.operation?.status ?? '--') }}</strong></div>
+        <div class="metric-card"><span>面积</span><strong>{{ format(lastResult.operation?.actualAreaMu) }} 亩</strong></div>
+        <div class="metric-card"><span>覆盖率</span><strong>{{ percent(lastResult.operation?.coverageRate) }}</strong></div>
+        <div class="metric-card"><span>航线</span><strong>{{ format(lastResult.operation?.flightDistanceM) }} 米</strong></div>
+        <div class="metric-card"><span>图层</span><strong>{{ lastResult.mapLayers?.length ?? 0 }}</strong></div>
       </div>
-      <p v-if="needsManualLink" class="warning-text">Needs manual field link before this operation can be trusted in reports.</p>
+      <p v-if="needsManualLink" class="warning-text">该作业需要手动关联田块后，才能在报表中使用。</p>
       <p v-if="lastResult.limitation" class="warning-text">{{ lastResult.limitation }}</p>
     </div>
   </section>
@@ -57,6 +57,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import { importDroneOperation, importDroneOperationFile } from '../../api/drone-api';
+import { translateStatusLabel } from '../../services/status-translation';
 
 const emit = defineEmits<{ imported: [] }>();
 const mode = ref<'file' | 'json'>('file');
@@ -98,7 +99,7 @@ function onFileChange(event: Event) {
 
 async function submitFile() {
   if (!selectedFile.value) {
-    message.value = 'Choose a drone file first.';
+    message.value = '请先选择无人机作业文件。';
     return;
   }
   const formData = new FormData();
@@ -108,7 +109,7 @@ async function submitFile() {
   formData.append('file', selectedFile.value);
   const result = await importDroneOperationFile(formData);
   lastResult.value = result.data;
-  message.value = result.isMock ? 'Mock file import completed.' : 'File import completed.';
+  message.value = result.isMock ? '（模拟数据）文件导入完成。' : '文件导入完成。';
   emit('imported');
 }
 
@@ -117,7 +118,7 @@ async function submitJson() {
     const payload = JSON.parse(text.value);
     const result = await importDroneOperation(payload);
     lastResult.value = result.data;
-    message.value = result.isMock ? 'Mock JSON import completed.' : 'JSON import completed.';
+    message.value = result.isMock ? '（模拟数据）JSON 导入完成。' : 'JSON 导入完成。';
     emit('imported');
   } catch (error) {
     message.value = error instanceof Error ? error.message : String(error);

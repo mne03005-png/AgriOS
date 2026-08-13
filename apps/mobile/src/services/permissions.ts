@@ -23,3 +23,17 @@ export function canonicalRole(role?: string): CanonicalRole {
 export function canAccess(allowed: CanonicalRole[] | undefined, role?: string) {
   return !allowed?.length || allowed.includes(canonicalRole(role));
 }
+
+// Centralized user-facing role label -- the only place a role should ever be turned into
+// display text. Never show a raw canonical/legacy role code in normal UI (UX-HOTFIX-1).
+const roleLabels: Record<CanonicalRole, string> = {
+  FARMER: '农场主',
+  MANAGER: '农场管理员',
+  INSTALLER: '安装调试人员',
+  ENGINEER: '工程师',
+  SUPER_ADMIN: '平台管理员'
+};
+
+export function roleLabel(role?: string): string {
+  return roleLabels[canonicalRole(role)];
+}

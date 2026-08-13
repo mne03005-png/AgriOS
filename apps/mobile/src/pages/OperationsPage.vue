@@ -1,6 +1,5 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <div v-if="isMock" class="mock-banner">当前为模拟数据。</div>
     <header class="section-header">
       <h1>作业</h1>
@@ -14,9 +13,8 @@
     <!-- 当前作业: existing action-plan/rotation/fertigation/drone groups, unchanged content -->
     <template v-if="activeTabKey === 'all'">
       <section v-if="!hasOperations || !demoReady" class="panel">
-        <div class="panel-title">作业数据尚未就绪</div>
-        <p class="warning-text">请先执行 npx prisma db seed，生成轮灌、水肥、无人机等 Demo 作业。</p>
-        <RouterLink class="ghost-button link-button" to="/demo-status">查看 Demo 状态</RouterLink>
+        <div class="panel-title">暂无可用作业数据</div>
+        <p class="warning-text">请稍后刷新，或联系管理员确认轮灌、水肥等作业是否已生成。</p>
       </section>
       <section v-for="group in groups" :key="group.key" class="operation-group">
         <div class="section-header compact">
@@ -28,7 +26,7 @@
             <strong>{{ item.name ?? item.id ?? item.decision?.recommendation ?? '作业' }}</strong>
             <StatusBadge :label="item.status ?? 'UNKNOWN'" tone="muted" />
           </div>
-          <p class="subtle">{{ item.operationType ?? item.command ?? item.type ?? '后端控制作业' }}</p>
+          <p class="subtle">{{ item.operationType || item.command || item.type ? translateStatusLabel(item.operationType ?? item.command ?? item.type) : '后端控制作业' }}</p>
         </article>
       </section>
     </template>
@@ -69,9 +67,9 @@ import { getDemoHealth } from '../api/demo-api';
 import { getOperations } from '../api/mobile-api';
 import { mockOperations } from '../api/mock-data';
 import StatusBadge from '../components/common/StatusBadge.vue';
-import DemoHeader from '../components/common/DemoHeader.vue';
 import ExecutionModeSwitch from '../components/control/ExecutionModeSwitch.vue';
 import { canAccess, canonicalRole } from '../services/permissions';
+import { translateStatusLabel } from '../services/status-translation';
 import { authStore } from '../stores/auth.store';
 import { farmStore } from '../stores/farm.store';
 

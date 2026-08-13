@@ -1,6 +1,5 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <header class="section-header">
       <div>
         <p class="eyebrow">Installer</p>
@@ -145,7 +144,6 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import DemoHeader from '../components/common/DemoHeader.vue';
 import StatusBadge from '../components/common/StatusBadge.vue';
 import { getInstallerChecks } from '../api/production-api';
 import { getReadOnlyDevices } from '../api/mobile-api';

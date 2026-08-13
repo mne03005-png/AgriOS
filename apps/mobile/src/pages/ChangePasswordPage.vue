@@ -1,9 +1,7 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <header class="section-header">
       <div>
-        <p class="eyebrow">Security</p>
         <h1>修改密码</h1>
         <p class="subtle">修改成功后会刷新登录令牌，旧令牌自动失效。</p>
       </div>
@@ -33,7 +31,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import DemoHeader from '../components/common/DemoHeader.vue';
 import { changePassword } from '../api/auth-api';
 import { authStore } from '../stores/auth.store';
 

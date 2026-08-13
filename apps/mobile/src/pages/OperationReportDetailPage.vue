@@ -3,19 +3,18 @@
     <div v-if="isMock" class="mock-banner">当前为模拟报告详情</div>
     <header class="section-header compact">
       <div>
-        <p class="eyebrow">Operation Report</p>
-        <h2>{{ report.title ?? report.type }}</h2>
-        <p class="subtle">{{ report.type }} · {{ report.createdAt ? new Date(report.createdAt).toLocaleString() : '--' }}</p>
+        <h2>{{ report.title ?? translateStatusLabel(report.type) }}</h2>
+        <p class="subtle">{{ translateStatusLabel(report.type) }} · {{ report.createdAt ? new Date(report.createdAt).toLocaleString() : '--' }}</p>
       </div>
     </header>
 
     <section class="metric-grid">
       <Metric label="作业地块" :value="summary.fieldId ?? '--'" />
-      <Metric label="作业面积" :value="`${metrics.actualAreaMu ?? 0} mu`" />
+      <Metric label="作业面积" :value="`${metrics.actualAreaMu ?? 0} 亩`" />
       <Metric label="覆盖率" :value="percent(metrics.coverageRate)" />
-      <Metric label="漏喷面积" :value="`${metrics.missedAreaMu ?? 0} mu`" />
-      <Metric label="用药量" :value="`${metrics.sprayVolumeL ?? 0} L`" />
-      <Metric label="亩用量" :value="`${metrics.dosagePerMu ?? 0} L/mu`" />
+      <Metric label="漏喷面积" :value="`${metrics.missedAreaMu ?? 0} 亩`" />
+      <Metric label="用药量" :value="`${metrics.sprayVolumeL ?? 0} 升`" />
+      <Metric label="亩用量" :value="`${metrics.dosagePerMu ?? 0} 升/亩`" />
       <Metric label="成本" :value="`${summary.operationCostSummary?.totalAmount ?? 0} ${summary.operationCostSummary?.currency ?? 'CNY'}`" />
       <Metric label="图层" :value="summary.mapLayerIds?.length ?? 0" />
     </section>
@@ -33,6 +32,7 @@
 import { computed, defineComponent, h, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { getOperationReport } from '../api/operation-report-api';
+import { translateStatusLabel } from '../services/status-translation';
 
 const route = useRoute();
 const report = ref<any>({});

@@ -1,6 +1,5 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <div v-if="isMock" class="mock-banner">Demo health is mock fallback. 请先启动 backend 并执行 npx prisma db seed。</div>
     <header class="section-header compact">
       <div>
@@ -20,7 +19,7 @@
         <div class="status-row"><span>edge</span><strong>{{ ready.edgeControllerConfigured ? 'CONFIGURED' : 'SKELETON' }}</strong></div>
         <div class="status-row"><span>bluetooth</span><strong>{{ ready.bluetoothLocalEnabled ? 'ENABLED' : 'DISABLED' }}</strong></div>
       </div>
-      <p class="subtle">ThingsBoard 用于设备调试，AgriOS 用于农业驾驶舱。</p>
+      <p class="subtle">ThingsBoard 用于设备调试，AgriOS 用于农场生产管理。</p>
     </section>
 
     <section class="panel">
@@ -55,7 +54,6 @@ import { onMounted, ref } from 'vue';
 import { getDemoHealth } from '../api/demo-api';
 import { getHealthReady } from '../api/production-api';
 import { defaultFarmId } from '../api/mock-data';
-import DemoHeader from '../components/common/DemoHeader.vue';
 
 const health = ref<any>({});
 const ready = ref<any>({});

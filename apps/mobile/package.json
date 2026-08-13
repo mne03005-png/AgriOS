@@ -20,6 +20,7 @@
     ,"test:ux1g-installer-workspace": "node scripts/verify-ux1g-installer-workspace.mjs"
     ,"test:ux1h-platform-mode": "node scripts/verify-ux1h-platform-mode.mjs"
     ,"test:ux1i-visual-system": "node scripts/verify-ux1i-visual-system.mjs"
+    ,"test:ux-hotfix-1": "node scripts/verify-ux-hotfix-1.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-vue": "^6.0.0",

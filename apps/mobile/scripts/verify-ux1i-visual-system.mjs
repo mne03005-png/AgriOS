@@ -12,7 +12,6 @@ const statusTranslation = await readSrc('../src/services/status-translation.ts')
 const navigation = await readSrc('../src/config/navigation.ts');
 const appVue = await readSrc('../src/App.vue');
 const appTabBar = await readSrc('../src/components/common/AppTabBar.vue');
-const demoHeader = await readSrc('../src/components/common/DemoHeader.vue');
 const platformMode = await readSrc('../src/services/platform-mode.ts');
 const engineerPage = await readSrc('../src/pages/EngineerWorkbenchPage.vue');
 const installerPage = await readSrc('../src/pages/InstallerChecksPage.vue');
@@ -119,18 +118,17 @@ test('14 Installer step statuses unchanged (AVAILABLE/PARTIAL/FUTURE assignments
   assert.match(installerPage, /:label="step\.status" raw/, 'status must render as real text, not a color-only indicator');
 });
 
-// --- 15: DemoHeader remains context-aware ---
-test('15 DemoHeader remains context-aware (UX-1H closeout logic untouched)', () => {
-  assert.match(demoHeader, /import \{ getPlatformMode \} from '\.\.\/\.\.\/services\/platform-mode'/);
-  assert.match(demoHeader, /if \(mode\.value === 'PLATFORM'\) return null;/);
+// --- 15: header remains context-aware ---
+// DemoHeader.vue was removed by UX-HOTFIX-1 (redundant second header, source of the banned
+// Tesla wording); App.vue's own contextLabel computed now owns this logic.
+test('15 App.vue header remains context-aware (Platform Mode vs Farm Operation Mode distinction preserved)', () => {
+  assert.match(appVue, /import \{ getPlatformMode \} from '\.\/services\/platform-mode'/);
+  assert.match(appVue, /if \(mode\.value === 'PLATFORM'\) return '平台模式';/);
 });
 
 // --- 16: no hardcoded fake current farm reintroduced ---
 test('16 no hardcoded fake current farm reintroduced anywhere', () => {
-  // Check each file's <template> only -- DemoHeader.vue's own script-level comment legitimately
-  // documents the historical string it removed (UX-1H closeout), which would false-positive a
-  // whole-file check.
-  for (const file of [demoHeader, appVue, superAdminPage]) {
+  for (const file of [appVue, superAdminPage]) {
     const templateMatch = file.match(/<template>([\s\S]*?)<\/template>/);
     assert.doesNotMatch(templateMatch ? templateMatch[1] : file, /洋葱智慧农场 Demo/);
   }

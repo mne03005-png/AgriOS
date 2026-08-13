@@ -1,10 +1,8 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <div v-if="isMock" class="mock-banner">当前为模拟数据。</div>
     <header class="section-header">
       <div>
-        <p class="eyebrow">Manager</p>
         <h1>{{ data.farm?.name ?? '管理概览' }}</h1>
         <p class="subtle">农场运营状态、待处理审核和作业入口。</p>
       </div>
@@ -56,14 +54,13 @@
         <RouterLink class="panel" to="/drone-reviews">无人机审核</RouterLink>
         <RouterLink class="panel" to="/boundaries/review">边界审核</RouterLink>
       </div>
-      <p class="subtle quick-actions-label">成员与 Zone 管理：功能建设中，尚未开放</p>
+      <p class="subtle quick-actions-label">成员与分区管理：功能建设中，尚未开放</p>
     </section>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import DemoHeader from '../components/common/DemoHeader.vue';
 import StatusBadge from '../components/common/StatusBadge.vue';
 import { getAlerts, getCockpit } from '../api/mobile-api';
 import { getDroneReviews } from '../api/drone-review-api';

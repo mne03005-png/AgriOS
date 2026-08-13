@@ -1,6 +1,5 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <header class="section-header">
       <div>
         <p class="eyebrow">Bluetooth</p>
@@ -30,7 +29,6 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import DemoHeader from '../components/common/DemoHeader.vue';
 import { getBluetoothSessions } from '../api/production-api';
 
 const items = ref<any[]>([]);

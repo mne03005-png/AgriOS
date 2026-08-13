@@ -35,8 +35,8 @@ export const mockDroneOperations = [
 ];
 
 export const mockCockpit = {
-  farm: { id: defaultFarmId, name: 'Demo onion family farm', fields: [{ id: defaultFieldId, name: 'Onion field A' }] },
-  weather: { summary: 'Sunny, 31C, southeast wind' },
+  farm: { id: defaultFarmId, name: '示范洋葱农场', fields: [{ id: defaultFieldId, name: '洋葱地块 A' }] },
+  weather: { summary: '晴，31℃，东南风' },
   deviceOnlineRate: 86,
   autoModeStatus: { enabled: false, policy: 'assisted' },
   todayRiskLevel: 'NORMAL',
@@ -50,27 +50,27 @@ export const mockCockpit = {
   tankLevelWarnings: [{ deviceId: 'tank_001', fertilizerTankLevelL: 12 }],
   activeRotationRuns: [{ id: 'rotation_run_001', status: 'RUNNING' }],
   latestActivities: [
-    { id: 'activity_001', type: 'ROTATION_STARTED', title: 'Rotation started', createdAt: new Date().toISOString() },
-    { id: 'activity_002', type: 'DRONE_OPERATION_IMPORTED', title: 'Drone spraying imported', createdAt: new Date().toISOString() }
+    { id: 'activity_001', type: 'ROTATION_STARTED', title: '轮灌已开始', createdAt: new Date().toISOString() },
+    { id: 'activity_002', type: 'DRONE_OPERATION_IMPORTED', title: '无人机喷洒作业已导入', createdAt: new Date().toISOString() }
   ],
-  latestDecision: { recommendation: 'SHOULD_IRRIGATE', reason: 'Soil moisture is below demo onion growth target.', confidence: 0.82 },
-  latestActionPlans: [{ id: 'plan_001', status: 'PENDING_APPROVAL', safety: { warnings: ['Manual confirmation required'] } }],
+  latestDecision: { recommendation: 'SHOULD_IRRIGATE', reason: '土壤湿度低于洋葱生长所需目标值。', confidence: 0.82 },
+  latestActionPlans: [{ id: 'plan_001', status: 'PENDING_APPROVAL', safety: { warnings: ['需要人工确认'] } }],
   droneOperations: mockDroneOperations,
-  miniMapLayers: [{ id: 'layer_001', name: 'Onion field A', type: 'FIELD' }],
+  miniMapLayers: [{ id: 'layer_001', name: '洋葱地块 A', type: 'FIELD' }],
   quickActions: { emergencyStop: true, manualValve: true, autoMode: false, alerts: true }
 };
 
 export const mockMap = {
-  fieldBoundaries: [{ id: 'boundary_001', fieldId: defaultFieldId, name: 'Onion field A', status: 'APPROVED', areaMu: 300 }],
-  irrigationZones: [{ id: 'zone_001', name: 'Zone 1' }],
-  valveMarkers: [{ id: 'valve_001', name: 'Valve A1', online: true }],
-  sensorMarkers: [{ id: 'sensor_001', name: 'Soil moisture sensor', online: true }],
-  pumpMarkers: [{ id: 'pump_001', name: 'Pump controller', online: true }],
-  pressureSensors: [{ id: 'pressure_001', name: 'Main pressure sensor', online: true }],
-  flowMeters: [{ id: 'flow_001', name: 'Main flow meter', online: true }],
-  fertigationDevices: [{ id: 'fert_dev_001', name: 'Fertigation controller', online: true }],
-  fertilizerTanks: [{ id: 'tank_001', name: 'NPK tank', currentLevelL: 120 }],
-  rotationGroups: [{ id: 'rotation_group_001', name: 'East block rotation' }],
+  fieldBoundaries: [{ id: 'boundary_001', fieldId: defaultFieldId, name: '洋葱地块 A', status: 'APPROVED', areaMu: 300 }],
+  irrigationZones: [{ id: 'zone_001', name: '1 号轮灌区' }],
+  valveMarkers: [{ id: 'valve_001', name: '阀门 A1', online: true }],
+  sensorMarkers: [{ id: 'sensor_001', name: '土壤湿度传感器', online: true }],
+  pumpMarkers: [{ id: 'pump_001', name: '水泵控制器', online: true }],
+  pressureSensors: [{ id: 'pressure_001', name: '主压力传感器', online: true }],
+  flowMeters: [{ id: 'flow_001', name: '主流量计', online: true }],
+  fertigationDevices: [{ id: 'fert_dev_001', name: '水肥一体机', online: true }],
+  fertilizerTanks: [{ id: 'tank_001', name: 'NPK 肥料罐', currentLevelL: 120 }],
+  rotationGroups: [{ id: 'rotation_group_001', name: '东区轮灌组' }],
   waterChannels: [],
   pipelines: [],
   obstacles: [],
@@ -78,21 +78,21 @@ export const mockMap = {
   droneOperations: mockDroneOperations,
   droneRouteLayers: [{
     id: 'drone_route_001',
-    name: 'Drone route',
+    name: '无人机航线',
     type: 'DRONE_ROUTE',
     geoJson: { type: 'LineString', coordinates: [[118.09, 36.705], [118.13, 36.715], [118.1, 36.735]] },
     styleJson: { droneOperationId: 'drone_001', operationType: 'SPRAYING', layerRole: 'DRONE_ROUTE' }
   }],
   droneCoverageLayers: [{
     id: 'drone_coverage_001',
-    name: 'Spray coverage',
+    name: '喷洒覆盖范围',
     type: 'ORTHOMOSAIC',
     geoJson: { type: 'Polygon', coordinates: [[[118.095, 36.7], [118.13, 36.702], [118.126, 36.736], [118.094, 36.734], [118.095, 36.7]]] },
     styleJson: { droneOperationId: 'drone_001', operationType: 'SPRAYING', layerRole: 'DRONE_COVERAGE' }
   }],
   prescriptionLayers: [{
     id: 'prescription_001',
-    name: 'Prescription layer',
+    name: '处方图层',
     type: 'ORTHOMOSAIC',
     geoJson: { type: 'Polygon', coordinates: [[[118.1, 36.705], [118.12, 36.705], [118.12, 36.725], [118.1, 36.725], [118.1, 36.705]]] },
     styleJson: { droneOperationId: 'drone_002', operationType: 'MAPPING', layerRole: 'PRESCRIPTION_OR_ORTHOMOSAIC' }
@@ -102,7 +102,7 @@ export const mockMap = {
 };
 
 export const mockFieldDetail = {
-  field: { id: defaultFieldId, farmId: defaultFarmId, name: 'Onion field A', areaMu: 300, soilType: 'loam' },
+  field: { id: defaultFieldId, farmId: defaultFarmId, name: '洋葱地块 A', areaMu: 300, soilType: 'loam' },
   boundary: mockMap.fieldBoundaries[0],
   cropType: 'onion',
   cropStage: 'GROWING',
@@ -116,14 +116,14 @@ export const mockFieldDetail = {
   droneOperationRecords: mockDroneOperations,
   droneOperationReviews: [{ id: 'review_001', status: 'PENDING', droneOperationId: 'drone_001', confirmedCoverageRate: 96.8 }],
   operationCostSummary: { totalAmount: 0, currency: 'CNY', byCategory: { DRONE_SERVICE: 0, PESTICIDE: 0 }, count: 2 },
-  cropHealthObservations: [{ id: 'health_001', type: 'UNKNOWN', severity: 'REVIEW', title: 'Drone scouting placeholder' }],
+  cropHealthObservations: [{ id: 'health_001', type: 'UNKNOWN', severity: 'REVIEW', title: '无人机巡田数据占位' }],
   yieldFactors: [{ id: 'yield_factor_001', factorType: 'DRONE_SPRAYING', refType: 'DroneOperation', refId: 'drone_001' }],
-  latestOperationReports: [{ id: 'report_drone_001', type: 'DRONE_SPRAYING', title: 'Drone spraying report' }],
+  latestOperationReports: [{ id: 'report_drone_001', type: 'DRONE_SPRAYING', title: '无人机喷洒作业报告' }],
   latestDroneSprayingReport: { id: 'report_drone_001', type: 'DRONE_SPRAYING' },
   latestMappingLayer: mockMap.prescriptionLayers[0],
   cropIrrigationRecipe: { targetMoistureMin: 38, targetMoistureMax: 58, recommendedIrrigationMinutes: 30 },
   wettingSimulationPreview: { deepPercolationRisk: 'LOW', expectedMoistureIncrease: 8, recommendedDuration: 30 },
-  latestDesign: { name: 'Onion drip irrigation design', status: 'CHECKED' },
+  latestDesign: { name: '洋葱滴灌方案', status: 'CHECKED' },
   latestHydraulicCheck: { isPassed: true, endPressure: 1.3 }
 };
 
@@ -131,7 +131,7 @@ export const mockRecommendations = [
   {
     id: 'decision_001',
     recommendation: 'SHOULD_IRRIGATE',
-    reason: 'Soil moisture is low; irrigate for 30 minutes.',
+    reason: '土壤湿度偏低，建议灌溉 30 分钟。',
     confidenceScore: 0.82,
     riskLevel: 'LOW',
     expectedWaterUsage: 1200,
@@ -158,12 +158,12 @@ export const mockOperations = {
 
 export const mockAlerts = {
   safetyAlerts: [
-    { id: 'alert_001', severity: 'HIGH', message: 'Soil moisture too low', fieldId: defaultFieldId, status: 'OPEN' },
-    { id: 'alert_002', severity: 'MEDIUM', message: 'Manual valve execution requires confirmation', fieldId: defaultFieldId, status: 'OPEN' }
+    { id: 'alert_001', severity: 'HIGH', message: '土壤湿度过低', fieldId: defaultFieldId, status: 'OPEN' },
+    { id: 'alert_002', severity: 'MEDIUM', message: '手动阀门操作需要确认', fieldId: defaultFieldId, status: 'OPEN' }
   ],
   anomalies: [
-    { id: 'anom_001', type: 'PRESSURE_DROP', severity: 'HIGH', message: 'Pressure dropped below threshold', fieldId: defaultFieldId },
-    { id: 'anom_002', type: 'TANK_LOW_LEVEL', severity: 'MEDIUM', message: 'Fertilizer tank low level', fieldId: defaultFieldId }
+    { id: 'anom_001', type: 'PRESSURE_DROP', severity: 'HIGH', message: '压力低于阈值', fieldId: defaultFieldId },
+    { id: 'anom_002', type: 'TANK_LOW_LEVEL', severity: 'MEDIUM', message: '肥料罐液位过低', fieldId: defaultFieldId }
   ]
 };
 

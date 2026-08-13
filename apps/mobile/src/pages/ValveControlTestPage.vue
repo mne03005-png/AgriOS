@@ -1,6 +1,5 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <div class="mock-banner">当前为安全模拟模式，不会真实打开阀门，不会启动水泵。</div>
 
     <header class="section-header">
@@ -72,7 +71,6 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import DemoHeader from '../components/common/DemoHeader.vue';
 import { authStore } from '../stores/auth.store';
 import { requestDangerousConfirmation } from '../services/dangerous-operation';
 import { apiErrorMessage } from '../api/api-error';

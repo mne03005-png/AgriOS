@@ -6,14 +6,16 @@
     </div>
     <div class="timeline-list">
       <div v-for="item in items" :key="item.id" class="timeline-item">
-        <strong>{{ item.title ?? item.type }}</strong>
-        <span>{{ item.type }} · {{ formatTime(item.createdAt) }}</span>
+        <strong>{{ item.title ?? translateStatusLabel(item.type) }}</strong>
+        <span>{{ translateStatusLabel(item.type) }} · {{ formatTime(item.createdAt) }}</span>
       </div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
+import { translateStatusLabel } from '../../services/status-translation';
+
 const props = defineProps<{ activities?: any[] }>();
 const items = props.activities ?? [];
 

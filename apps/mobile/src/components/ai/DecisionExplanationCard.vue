@@ -1,7 +1,7 @@
 <template>
   <article class="decision-card">
     <div class="card-topline">
-      <strong>{{ item.recommendation ?? 'NO_ACTION' }}</strong>
+      <strong>{{ translateStatusLabel(item.recommendation ?? 'NO_ACTION') }}</strong>
       <RiskBadge :level="item.riskLevel ?? item.status ?? 'NORMAL'" />
     </div>
     <p>{{ item.reason ?? item.reasons?.[0] ?? '暂无解释' }}</p>
@@ -16,6 +16,7 @@
 
 <script setup lang="ts">
 import RiskBadge from './RiskBadge.vue';
+import { translateStatusLabel } from '../../services/status-translation';
 
 defineProps<{ item: any }>();
 const percent = (value: number) => `${Math.round(Number(value) * 100)}%`;

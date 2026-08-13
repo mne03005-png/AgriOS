@@ -1,9 +1,7 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <header class="section-header">
       <div>
-        <p class="eyebrow">Auth</p>
         <h1>AgriOS 登录</h1>
         <p class="subtle">生产环境必须登录后查看农场数据。</p>
       </div>
@@ -30,7 +28,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import DemoHeader from '../components/common/DemoHeader.vue';
 import { login, logout } from '../api/auth-api';
 import { authStore } from '../stores/auth.store';
 import { resolveLandingRoute } from '../services/role-navigation';

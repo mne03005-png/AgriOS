@@ -1,13 +1,13 @@
 <template>
   <section class="panel compact-panel">
     <div class="card-topline">
-      <strong>Drone Coverage</strong>
-      <span class="subtle">{{ operations.length }} records</span>
+      <strong>无人机作业覆盖汇总</strong>
+      <span class="subtle">{{ operations.length }} 条记录</span>
     </div>
     <div class="metric-grid tight">
-      <div class="metric-card"><span>Total area</span><strong>{{ totalArea }} mu</strong></div>
-      <div class="metric-card"><span>Avg coverage</span><strong>{{ avgCoverage }}%</strong></div>
-      <div class="metric-card"><span>Chemical</span><strong>{{ totalChemical }} L</strong></div>
+      <div class="metric-card"><span>总面积</span><strong>{{ totalArea }} 亩</strong></div>
+      <div class="metric-card"><span>平均覆盖率</span><strong>{{ avgCoverage }}%</strong></div>
+      <div class="metric-card"><span>药剂用量</span><strong>{{ totalChemical }} 升</strong></div>
     </div>
   </section>
 </template>

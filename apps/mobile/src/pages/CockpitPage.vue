@@ -1,7 +1,6 @@
 <template>
   <section class="page">
-    <DemoHeader />
-    <div v-if="isMock" class="mock-banner">当前为模拟数据。连接 backend 后会自动切换真实 Demo 数据。</div>
+    <div v-if="isMock" class="mock-banner">当前显示的是模拟数据，接入真实农场数据后将自动切换。</div>
     <FarmStatusHeader :farm="data.farm" :weather="data.weather" :online-rate="data.deviceOnlineRate ?? 0" />
 
     <!-- 今日状态: highest priority -- is the farm generally okay, is anything urgent -->
@@ -60,9 +59,8 @@
     </div>
 
     <section v-if="!demoReady" class="panel">
-      <div class="panel-title">Demo data not ready</div>
-      <p class="warning-text">请先在 apps/backend 执行 npx prisma db seed，然后刷新 Cockpit。</p>
-      <RouterLink class="ghost-button link-button" to="/demo-status">查看 Demo 状态</RouterLink>
+      <div class="panel-title">暂无可用农场数据</div>
+      <p class="warning-text">请稍后刷新，或联系管理员确认农场数据是否已就绪。</p>
     </section>
 
     <!-- demoted: unavailable physical controls, visually secondary and clearly inert -->
@@ -76,7 +74,6 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { getAlerts, getCockpit } from '../api/mobile-api';
 import { getDemoHealth } from '../api/demo-api';
 import { mockCockpit, mockAlerts } from '../api/mock-data';
-import DemoHeader from '../components/common/DemoHeader.vue';
 import FarmStatusHeader from '../components/cockpit/FarmStatusHeader.vue';
 import FarmActivityTimeline from '../components/cockpit/FarmActivityTimeline.vue';
 import MiniFarmMap from '../components/cockpit/MiniFarmMap.vue';

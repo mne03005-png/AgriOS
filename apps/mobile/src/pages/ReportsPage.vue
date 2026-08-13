@@ -1,6 +1,5 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <div v-if="isMock" class="mock-banner">当前为模拟数据。</div>
     <header class="section-header">
       <h1>报表</h1>
@@ -31,7 +30,7 @@
     <section class="panel">
       <div class="panel-title">汇报摘要</div>
       <p>今日灌溉执行情况：轮灌、水肥和设备执行状态已汇总到移动报表。</p>
-      <p>无人机喷洒覆盖情况：覆盖率 {{ report.averageCoverageRate ?? 0 }}%，作业面积 {{ report.sprayingAreaTotal ?? 0 }} mu。</p>
+      <p>无人机喷洒覆盖情况：覆盖率 {{ report.averageCoverageRate ?? 0 }}%，作业面积 {{ report.sprayingAreaTotal ?? 0 }} 亩。</p>
       <p>成本投入情况：当前记录 {{ report.operationCostSummary?.count ?? 0 }} 条成本，占位金额 {{ report.operationCostSummary?.totalAmount ?? 0 }} {{ report.operationCostSummary?.currency ?? 'CNY' }}。</p>
       <p>病虫害观察：{{ report.cropHealthSummary?.total ?? 0 }} 条观察记录。</p>
       <p>产量影响因素：{{ report.yieldAnalysisSummary?.factorCount ?? 0 }} 条因素进入后续分析。</p>
@@ -43,9 +42,8 @@
       <p>产量因素类型：{{ Object.keys(report.yieldAnalysisSummary?.byFactorType ?? {}).join(', ') || '--' }}</p>
     </section>
     <section v-if="!hasReportData || !demoReady" class="panel">
-      <div class="panel-title">报表数据尚未就绪</div>
-      <p class="warning-text">请先执行 npx prisma db seed，生成成本、作物健康、产量因素和作业报告。</p>
-      <RouterLink class="ghost-button link-button" to="/demo-status">查看 Demo 状态</RouterLink>
+      <div class="panel-title">暂无可用报表数据</div>
+      <p class="warning-text">请稍后刷新，或联系管理员确认作业和成本数据是否已生成。</p>
     </section>
   </section>
 </template>
@@ -55,7 +53,6 @@ import { computed, defineComponent, h, onMounted, ref } from 'vue';
 import { getDemoHealth } from '../api/demo-api';
 import { getReportsSummary } from '../api/mobile-api';
 import { defaultFarmId, mockReports } from '../api/mock-data';
-import DemoHeader from '../components/common/DemoHeader.vue';
 
 const report = ref<any>(mockReports);
 const isMock = ref(true);

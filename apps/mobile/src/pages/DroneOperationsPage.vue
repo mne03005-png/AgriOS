@@ -1,6 +1,5 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <div v-if="isMock" class="mock-banner">当前为模拟数据。</div>
     <header class="section-header">
       <h1>无人机作业</h1>
@@ -11,16 +10,15 @@
       <RouterLink class="secondary-button" to="/reports">报表</RouterLink>
     </section>
     <section v-if="!operations.length || !demoReady" class="panel">
-      <div class="panel-title">无人机 Demo 数据尚未就绪</div>
-      <p class="warning-text">请先执行 npx prisma db seed，生成 Demo 无人机作业、审核和报告。</p>
-      <RouterLink class="ghost-button link-button" to="/demo-status">查看 Demo 状态</RouterLink>
+      <div class="panel-title">暂无无人机作业数据</div>
+      <p class="warning-text">请稍后刷新，或联系管理员确认无人机作业是否已导入。</p>
     </section>
     <DroneCoverageSummary :operations="operations" />
     <DroneImportPanel @imported="load" />
     <section v-for="group in groups" :key="group.type" class="operation-group">
       <div class="section-header compact">
         <h2>{{ group.label }}</h2>
-        <span class="subtle">{{ group.items.length }} records</span>
+        <span class="subtle">{{ group.items.length }} 条记录</span>
       </div>
       <DroneOperationCard v-for="item in group.items" :key="item.id" :item="item" />
     </section>
@@ -35,7 +33,6 @@ import { defaultFarmId, mockDroneOperations } from '../api/mock-data';
 import DroneCoverageSummary from '../components/drone/DroneCoverageSummary.vue';
 import DroneImportPanel from '../components/drone/DroneImportPanel.vue';
 import DroneOperationCard from '../components/drone/DroneOperationCard.vue';
-import DemoHeader from '../components/common/DemoHeader.vue';
 
 const operations = ref<any[]>(mockDroneOperations);
 const isMock = ref(true);

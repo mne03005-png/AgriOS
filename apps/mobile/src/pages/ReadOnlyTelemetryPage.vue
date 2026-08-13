@@ -1,6 +1,5 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <section class="panel readonly-banner">
       <div class="panel-title">Read-only device telemetry</div>
       <p class="subtle">Current mode is read-only. Device control is disabled by backend policy.</p>
@@ -63,7 +62,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { getReadOnlyDeadLetters, getReadOnlyDeviceHistory, getReadOnlyDevices } from '../api/mobile-api';
-import DemoHeader from '../components/common/DemoHeader.vue';
 import { authStore } from '../stores/auth.store';
 import { canonicalRole } from '../services/permissions';
 

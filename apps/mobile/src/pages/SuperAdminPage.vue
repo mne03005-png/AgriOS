@@ -1,6 +1,5 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <header class="section-header">
       <div>
         <p class="eyebrow">Platform</p>
@@ -68,7 +67,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import DemoHeader from '../components/common/DemoHeader.vue';
 import { getTenants, type Tenant } from '../api/tenant-api';
 import { getFarms, type Farm } from '../api/farm-api';
 import { farmStore } from '../stores/farm.store';

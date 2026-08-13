@@ -1,6 +1,5 @@
 <template>
   <section class="page">
-    <DemoHeader />
     <header class="section-header">
       <div>
         <p class="eyebrow">Edge</p>
@@ -25,7 +24,6 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import DemoHeader from '../components/common/DemoHeader.vue';
 import { getEdgeGateways } from '../api/production-api';
 
 const items = ref<any[]>([]);

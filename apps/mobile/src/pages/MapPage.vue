@@ -1,31 +1,41 @@
 <template>
   <section class="page map-page">
-    <DemoHeader />
     <div v-if="mapStore.isMock" class="mock-banner">当前为模拟地图数据</div>
-    <MapToolbar />
-    <div ref="mapEl" class="map-sdk-host"></div>
-    <FarmMapCanvas
-      class="svg-fallback"
-      :fields="mapStore.mapData.fieldBoundaries ?? []"
-      :sensors="mapStore.mapData.sensorMarkers ?? []"
-      :valves="mapStore.mapData.valveMarkers ?? []"
-      @select-field="selectField"
-    />
-    <LayerPanel :active-layers="mapStore.activeLayers" @toggle="toggleLayer" />
-    <DrawBoundaryTool :points="mapStore.drawingPoints" @start="startDrawing" @stop="stopDrawing" @save="saveBoundary" />
+    <MapToolbar v-model="viewMode" />
+    <div v-show="viewMode === 'map'" ref="mapEl" class="map-sdk-host"></div>
+    <section v-if="viewMode === 'list'" class="panel field-list-view">
+      <div v-if="!fieldList.length" class="empty-state">
+        <strong>暂无田块</strong>
+        <p>该农场下还没有登记的田块。</p>
+      </div>
+      <RouterLink
+        v-for="item in fieldList"
+        :key="item.id"
+        class="list-line link-line"
+        :to="`/fields/${item.fieldId ?? item.id}`"
+      >
+        <span class="attention-row-main">
+          <strong>{{ item.name ?? '地块' }}</strong>
+          <span class="subtle">{{ item.areaMu ?? item.area ?? '-' }} 亩</span>
+        </span>
+        <span class="subtle">{{ item.cropType ?? '-' }}</span>
+      </RouterLink>
+    </section>
+    <LayerPanel v-if="viewMode === 'map'" :active-layers="mapStore.activeLayers" @toggle="toggleLayer" />
+    <DrawBoundaryTool v-if="viewMode === 'map'" :points="mapStore.drawingPoints" @start="startDrawing" @stop="stopDrawing" @save="saveBoundary" />
     <GpsBoundaryRecorder
+      v-if="viewMode === 'map'"
       :points="mapStore.gpsTrackPoints"
       :recording="mapStore.gpsRecording"
       @start="startGps"
       @stop="stopGps"
       @submit="submitGps"
     />
-    <FieldBottomSheet :field="mapStore.selectedField" />
-    <DroneOperationCard v-if="selectedDroneOperation" :item="selectedDroneOperation" />
+    <FieldBottomSheet v-if="viewMode === 'map'" :field="mapStore.selectedField" />
+    <DroneOperationCard v-if="viewMode === 'map' && selectedDroneOperation" :item="selectedDroneOperation" />
     <section v-if="!hasMapData || !demoReady" class="panel">
-      <div class="panel-title">Map data not ready</div>
-      <p class="warning-text">请先执行 npx prisma db seed，确认 Demo 边界、图层和设备已生成。</p>
-      <RouterLink class="ghost-button link-button" to="/demo-status">查看 Demo 状态</RouterLink>
+      <div class="panel-title">暂无可用田块数据</div>
+      <p class="warning-text">请稍后刷新，或联系管理员确认农场边界、图层和设备是否已登记。</p>
     </section>
   </section>
 </template>
@@ -35,9 +45,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getDemoHealth } from '../api/demo-api';
 import { createFieldBoundary, importGpsTrack } from '../api/gis-api';
 import DroneOperationCard from '../components/drone/DroneOperationCard.vue';
-import DemoHeader from '../components/common/DemoHeader.vue';
 import DrawBoundaryTool from '../components/map/DrawBoundaryTool.vue';
-import FarmMapCanvas from '../components/map/FarmMapCanvas.vue';
 import FieldBottomSheet from '../components/map/FieldBottomSheet.vue';
 import GpsBoundaryRecorder from '../components/map/GpsBoundaryRecorder.vue';
 import LayerPanel from '../components/map/LayerPanel.vue';
@@ -49,6 +57,11 @@ import { farmStore } from '../stores/farm.store';
 const mapEl = ref<HTMLElement | null>(null);
 const selectedDroneOperation = ref<any | null>(null);
 const demoReady = ref(true);
+// UX-HOTFIX-1: 田块 owns spatial exploration as one page with a compact 地图/列表 view switch
+// (task section 11), replacing the previous MapToolbar dead-provider-button row and the
+// FarmMapCanvas hardcoded-decoration fallback (fake polygons unrelated to real field data).
+const viewMode = ref<'map' | 'list'>('map');
+const fieldList = computed(() => mapStore.mapData.fieldBoundaries ?? []);
 const hasMapData = computed(() => Boolean((mapStore.mapData.fieldBoundaries ?? []).length || (mapStore.mapData.droneRouteLayers ?? []).length || (mapStore.mapData.droneCoverageLayers ?? []).length));
 let adapter: MapAdapter | null = null;
 

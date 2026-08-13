@@ -3,9 +3,8 @@
     <div v-if="isMock" class="mock-banner">当前为模拟边界数据</div>
     <header class="section-header">
       <div>
-        <p class="eyebrow">Boundary Review</p>
         <h1>候选边界审核</h1>
-        <p class="subtle">批准后后端会创建 FIELD 图层</p>
+        <p class="subtle">批准后系统会自动生成对应的地块图层</p>
       </div>
     </header>
     <section v-for="item in boundaries" :key="item.id" class="panel">
