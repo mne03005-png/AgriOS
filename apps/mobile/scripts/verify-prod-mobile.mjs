@@ -34,7 +34,13 @@ assertContains('src/router/index.ts', router, "window.location.pathname.startsWi
 assertContains('src/router/index.ts', router, "window.location.hostname === 'agrios.xyzwtt.com'");
 assertContains('src/router/index.ts', router, "path: '/login', component: LoginPage, meta: { public: true }");
 assertContains('src/router/index.ts', router, "path: '/change-password', component: ChangePasswordPage");
-assertContains('src/router/index.ts', router, "path: '/:pathMatch(.*)*', redirect: '/cockpit'");
+// UX-1B (commit 298d14f) deliberately replaced the flat '/cockpit' catch-all redirect with a
+// role-aware one, so an unmatched path sends INSTALLER/ENGINEER/SUPER_ADMIN/MANAGER to their own
+// default workspace instead of always to the farmer home. This asserts the current accepted
+// contract: the catch-all must resolve through the single source of truth for default landing
+// (getDefaultRouteForRole), never a hardcoded literal route.
+assertContains('src/router/index.ts', router, "path: '/:pathMatch(.*)*', redirect: () => getDefaultRouteForRole(authStore.user?.canonicalRole ?? authStore.user?.role)");
+assertContains('src/services/role-navigation.ts', read('src/services/role-navigation.ts'), "FARMER: '/cockpit'");
 assertContains('src/router/index.ts', router, "query: { redirect: to.fullPath }");
 assertNotContains('src/router/index.ts', router, 'VITE_AUTH_TOKEN');
 
@@ -45,7 +51,13 @@ assertContains('src/api/http.ts', http, 'import.meta.env.DEV && env.VITE_AUTH_TO
 const login = read('src/pages/LoginPage.vue');
 assertContains('src/pages/LoginPage.vue', login, "useRoute");
 assertContains('src/pages/LoginPage.vue', login, "route.query.redirect");
-assertContains('src/pages/LoginPage.vue', login, "router.replace(redirect)");
+// UX-1B (commit 298d14f) replaced a raw `router.replace(redirect)` pass-through with
+// resolveLandingRoute(), which adds an open-redirect guard (isSafeInternalPath: only a
+// same-origin, root-relative path is ever honored) and a role-aware default-landing fallback.
+// This asserts the current, strictly safer accepted contract.
+assertContains('src/pages/LoginPage.vue', login, "resolveLandingRoute(result.user.canonicalRole ?? result.user.role, route.query.redirect)");
+assertContains('src/pages/LoginPage.vue', login, "router.replace(destination)");
+assertContains('src/services/role-navigation.ts', read('src/services/role-navigation.ts'), "export function isSafeInternalPath(value: unknown): value is string {");
 
 const changePassword = read('src/pages/ChangePasswordPage.vue');
 assertContains('src/pages/ChangePasswordPage.vue', changePassword, "changePassword(authStore.token");
