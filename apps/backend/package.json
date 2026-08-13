@@ -32,6 +32,7 @@
     ,"test:p0-safety-dispatch-closure": "ts-node scripts/verify-p0-safety-dispatch-closure.ts"
     ,"test:p0-physical-confirmation": "ts-node scripts/verify-p0-physical-confirmation.ts"
     ,"test:sec-iot-authorization": "ts-node scripts/verify-sec-iot-authorization.ts"
+    ,"test:sec-iot2-privileged-operations": "ts-node scripts/verify-sec-iot2-privileged-operations.ts"
     ,"test:mysql-migrations": "prisma migrate deploy && node scripts/verify-mysql-migrations.mjs"
     ,"test:r1b-control-entry": "ts-node scripts/verify-r1b-control-entry-convergence.ts"
     ,"test:r1b1-lifecycle": "ts-node scripts/verify-r1b1-physical-business-lifecycle.ts"

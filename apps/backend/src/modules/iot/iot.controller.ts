@@ -46,10 +46,18 @@ export class IotController {
     return this.webhookService.handleTelemetry(secret, { ...dto, eventId: dto.eventId ?? eventId }, { signature, timestamp, eventId, contentLength });
   }
 
+  // Platform-wide by design: getTenantDevices() pulls the entire ThingsBoard-side device list
+  // (ThingsBoard's own "tenant" concept, not AgriOS's), and the resulting AgriOS device lookup/
+  // create has no per-AgriOS-tenant scoping concept to filter by. No scheduler/cron calls this --
+  // it is a manual, admin-triggered sweep across the whole integrated fleet. PLATFORM_CONTEXT is
+  // the existing permission already used for exactly this "operates across tenants" category
+  // (see TenantController). Retrofitting a tenant filter here would require redesigning how
+  // ThingsBoard identities map to AgriOS tenants -- out of scope; see SEC-IOT-2 report.
   @ApiOkResponse({ description: 'Sync ThingsBoard devices' })
   @ApiBadGatewayResponse({ description: 'ThingsBoard request failed' })
   @Post('thingsboard/sync-devices')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.PLATFORM_CONTEXT)
   syncThingsBoardDevices() {
     return this.iotDeviceService.syncThingsBoardDevices();
   }
@@ -57,14 +65,16 @@ export class IotController {
   @ApiOkResponse({ description: 'Query ThingsBoard assets' })
   @ApiBadGatewayResponse({ description: 'ThingsBoard request failed' })
   @Get('thingsboard/assets')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.INTEGRATION_READ)
   getThingsBoardAssets() {
     return this.iotDeviceService.getThingsBoardAssets();
   }
 
   @ApiOkResponse({ description: 'Query ThingsBoard sync audits' })
   @Get('thingsboard/sync-audits')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.INTEGRATION_READ)
   findSyncAudits(@Query() query: Record<string, unknown>) {
     return this.syncAuditService.findAll(query);
   }
@@ -72,7 +82,8 @@ export class IotController {
   @ApiOkResponse({ description: 'Export ThingsBoard sync audit' })
   @ApiNotFoundResponse({ description: 'Sync audit not found' })
   @Get('thingsboard/sync-audits/:id/export')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.INTEGRATION_READ)
   exportSyncAudit(@Param('id') id: string, @Query('format') format?: string, @Query('includeRaw') includeRaw?: string) {
     return this.syncAuditService.exportOne(id, format ?? 'json', includeRaw === 'true');
   }
@@ -80,21 +91,24 @@ export class IotController {
   @ApiOkResponse({ description: 'Query ThingsBoard sync audit detail' })
   @ApiNotFoundResponse({ description: 'Sync audit not found' })
   @Get('thingsboard/sync-audits/:id')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.INTEGRATION_READ)
   findSyncAudit(@Param('id') id: string, @Query('includeRaw') includeRaw?: string) {
     return this.syncAuditService.findOne(id, includeRaw === 'true');
   }
 
   @ApiOkResponse({ description: 'Query IoT webhook dead letters' })
   @Get('webhook-dead-letters')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   findWebhookDeadLetters(@Query() query: Record<string, unknown>) {
     return this.deadLetterService.findAll(query);
   }
 
   @ApiOkResponse({ description: 'Query IoT webhook dead letters' })
   @Get('dead-letters')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   findDeadLetters(@Query() query: Record<string, unknown>) {
     return this.deadLetterService.findAll(query);
   }
@@ -102,21 +116,24 @@ export class IotController {
   @ApiOkResponse({ description: 'Query IoT webhook dead letter detail' })
   @ApiNotFoundResponse({ description: 'Dead letter not found' })
   @Get('dead-letters/:id')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   findDeadLetter(@Param('id') id: string) {
     return this.deadLetterService.findOne(id);
   }
 
   @ApiOkResponse({ description: 'Batch retry IoT webhook dead letters' })
   @Post('webhook-dead-letters/batch-retry')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_MANAGE)
   batchRetryDeadLetters(@Body() dto: BatchDeadLetterRetryDto) {
     return this.deadLetterService.batchRetry(dto, (payload) => this.webhookService.replayTelemetry(payload));
   }
 
   @ApiOkResponse({ description: 'Batch mark IoT webhook dead letters resolved' })
   @Post('webhook-dead-letters/batch-mark-resolved')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_MANAGE)
   batchMarkDeadLettersResolved(@Body() dto: BatchMarkDeadLetterResolvedDto) {
     return this.deadLetterService.batchMarkResolved(dto);
   }
@@ -124,7 +141,8 @@ export class IotController {
   @ApiOkResponse({ description: 'Preview IoT webhook dead letter replay' })
   @ApiNotFoundResponse({ description: 'Dead letter not found' })
   @Get('webhook-dead-letters/:id/preview')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   previewDeadLetter(@Param('id') id: string) {
     return this.deadLetterService.preview(id, (payload) => this.webhookService.previewTelemetry(payload));
   }
@@ -132,7 +150,8 @@ export class IotController {
   @ApiOkResponse({ description: 'Diff IoT webhook dead letter replay' })
   @ApiNotFoundResponse({ description: 'Dead letter not found' })
   @Get('webhook-dead-letters/:id/diff')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   diffDeadLetter(@Param('id') id: string) {
     return this.deadLetterService.diff(id, (payload) => this.webhookService.previewTelemetry(payload));
   }
@@ -140,7 +159,8 @@ export class IotController {
   @ApiOkResponse({ description: 'Mark IoT webhook dead letter resolved' })
   @ApiNotFoundResponse({ description: 'Dead letter not found' })
   @Post('webhook-dead-letters/:id/mark-resolved')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_MANAGE)
   markDeadLetterResolved(@Param('id') id: string, @Body() dto: MarkDeadLetterResolvedDto) {
     return this.deadLetterService.markResolved(id, dto.remark);
   }
@@ -148,7 +168,8 @@ export class IotController {
   @ApiOkResponse({ description: 'Retry one IoT webhook dead letter' })
   @ApiNotFoundResponse({ description: 'Dead letter not found' })
   @Post('webhook-dead-letters/:id/retry')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_MANAGE)
   retryDeadLetter(@Param('id') id: string) {
     return this.deadLetterService.retry(id, (payload) => this.webhookService.replayTelemetry(payload));
   }
@@ -169,51 +190,63 @@ export class IotController {
     return this.iotDeviceService.findBindingCandidatesByThingsBoard({ thingsboardDeviceId, deviceName });
   }
 
+  // Platform-wide by design: device.findMany() with no where at all, sweeping every device
+  // across every tenant to refresh online/offline status. No scheduler calls this either -- see
+  // syncThingsBoardDevices's comment above for the same reasoning. PLATFORM_CONTEXT, not a tenant
+  // filter, is the correct fix (a per-tenant "check my devices" concept doesn't exist for this
+  // route and inventing one would be a business-logic redesign, out of scope for SEC-IOT-2).
   @ApiOkResponse({ description: 'Check IoT device health' })
   @Post('devices/check-health')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.PLATFORM_CONTEXT)
   checkDevicesHealth() {
     return this.iotDeviceService.checkHealth();
   }
 
   @ApiOkResponse({ description: 'Query latest normalized telemetry for a device' })
   @Get('devices/:id/telemetry/latest')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   getLatestTelemetry(@Param('id') id: string, @Query('includeRaw') includeRaw?: string) {
     return this.telemetryNormalizerService.latestForDevice(id, includeRaw === 'true');
   }
 
   @ApiOkResponse({ description: 'Query bounded telemetry history for a device' })
   @Get('devices/:id/telemetry/history')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   getTelemetryHistory(@Param('id') id: string, @Query() query: Record<string, unknown>) {
     return this.telemetryNormalizerService.historyForDevice(id, query, query.includeRaw === 'true');
   }
 
   @ApiOkResponse({ description: 'Query latest real sensor telemetry for a farm' })
   @Get('farms/:farmId/telemetry/latest-real-sensor')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   getLatestRealSensorTelemetry(@Param('farmId') farmId: string, @Query('includeRaw') includeRaw?: string) {
     return this.telemetryNormalizerService.latestForFarm(farmId, includeRaw === 'true');
   }
 
   @ApiOkResponse({ description: 'Query farm telemetry summary' })
   @Get('farms/:farmId/telemetry/summary')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   getFarmTelemetrySummary(@Param('farmId') farmId: string) {
     return this.telemetryNormalizerService.farmSummary(farmId);
   }
 
   @ApiOkResponse({ description: 'Query devices for a field' })
   @Get('fields/:fieldId/devices')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   getFieldDevices(@Param('fieldId') fieldId: string, @Query() query: ListQueryDto) {
     return this.iotDeviceService.findByField(fieldId, query);
   }
 
   @ApiOkResponse({ description: 'Query field telemetry summary' })
   @Get('fields/:fieldId/telemetry/summary')
-  @UseGuards(JwtAuthGuard, TenantGuard)
+  @UseGuards(JwtAuthGuard, TenantGuard, PermissionsGuard)
+  @Permissions(PERMISSIONS.DEVICE_READ)
   getFieldTelemetrySummary(@Param('fieldId') fieldId: string) {
     return this.telemetryNormalizerService.fieldSummary(fieldId);
   }

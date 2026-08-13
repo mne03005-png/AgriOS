@@ -52,10 +52,17 @@ for (const [name, handler] of [...writeHandlers, ...readHandlers]) {
 test('the ThingsBoard telemetry webhook keeps zero guards (HMAC-secured, not JWT-secured) -- unaffected by this patch', () => {
   assert.deepEqual(guards(IotController.prototype.receiveThingsBoardTelemetry), []);
 });
-test('read-only endpoints outside the identity/binding cluster are unchanged (still JwtAuthGuard+TenantGuard only, no scope creep)', () => {
-  for (const handler of [IotController.prototype.getFarmTelemetrySummary, IotController.prototype.getTelemetryHistory, IotController.prototype.getIotStatus, IotController.prototype.findWebhookDeadLetters]) {
-    assert.equal(hasGuard(handler, PermissionsGuard), false, 'this patch must stay scoped to the identity/binding cluster');
+// SEC-IOT-1 itself stayed scoped to the identity/binding cluster (verified at the time: these four
+// handlers carried no PermissionsGuard). A later, separate closeout (SEC-IOT-2) deliberately closed
+// the remaining IotController gaps SEC-IOT-1's own audit had flagged but left unfixed --
+// getFarmTelemetrySummary/getTelemetryHistory now require DEVICE_READ, findWebhookDeadLetters now
+// requires DEVICE_READ. getIotStatus was evaluated by SEC-IOT-2 and deliberately left ungated
+// (static, non-sensitive config, no tenant data) -- see verify-sec-iot2-privileged-operations.ts.
+test('read-only endpoints SEC-IOT-1 left out of scope now carry the DEVICE_READ permission SEC-IOT-2 added (getIotStatus deliberately remains ungated)', () => {
+  for (const handler of [IotController.prototype.getFarmTelemetrySummary, IotController.prototype.getTelemetryHistory, IotController.prototype.findWebhookDeadLetters]) {
+    assert.equal(hasGuard(handler, PermissionsGuard), true, 'SEC-IOT-2 must have closed this read-endpoint gap');
   }
+  assert.equal(hasGuard(IotController.prototype.getIotStatus, PermissionsGuard), false, 'getIotStatus has no sensitive data and was deliberately left ungated');
 });
 
 // --- Section 11: role matrix for the three named binding writes ---

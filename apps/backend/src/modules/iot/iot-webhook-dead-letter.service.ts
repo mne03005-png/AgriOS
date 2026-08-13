@@ -79,7 +79,7 @@ export class IotWebhookDeadLetterService {
   }
 
   async markResolved(id: string, remark?: string) {
-    const existing = await (this.prisma as any).ioTWebhookDeadLetter.findUnique({ where: { id } });
+    const existing = await (this.prisma as any).ioTWebhookDeadLetter.findFirst({ where: this.tenantWhere({ id }) });
     if (!existing) throw new NotFoundException('Webhook dead letter not found');
 
     const updated = await (this.prisma as any).ioTWebhookDeadLetter.update({
@@ -97,7 +97,7 @@ export class IotWebhookDeadLetterService {
   }
 
   async preview(id: string, handler: (payload: any) => Promise<Record<string, any>>) {
-    const existing = await (this.prisma as any).ioTWebhookDeadLetter.findUnique({ where: { id } });
+    const existing = await (this.prisma as any).ioTWebhookDeadLetter.findFirst({ where: this.tenantWhere({ id }) });
     if (!existing) throw new NotFoundException('Webhook dead letter not found');
     if (!existing.rawPayload || typeof existing.rawPayload !== 'object') {
       throw new BadRequestException('Webhook dead letter rawPayload is empty or invalid');
@@ -131,7 +131,7 @@ export class IotWebhookDeadLetterService {
   }
 
   async retry(id: string, handler: (payload: any) => Promise<Record<string, any>>) {
-    const existing = await (this.prisma as any).ioTWebhookDeadLetter.findUnique({ where: { id } });
+    const existing = await (this.prisma as any).ioTWebhookDeadLetter.findFirst({ where: this.tenantWhere({ id }) });
     if (!existing) throw new NotFoundException('Webhook dead letter not found');
     if (existing.status === 'RESOLVED') {
       throw new BadRequestException('Webhook dead letter is already resolved');
@@ -207,7 +207,7 @@ export class IotWebhookDeadLetterService {
     const items = [];
     for (const id of ids) {
       try {
-        const existing = await (this.prisma as any).ioTWebhookDeadLetter.findUnique({ where: { id } });
+        const existing = await (this.prisma as any).ioTWebhookDeadLetter.findFirst({ where: this.tenantWhere({ id }) });
         if (!existing) {
           items.push({ id, retried: false, resolved: false, skipped: true, error: 'Webhook dead letter not found' });
           continue;
@@ -253,7 +253,7 @@ export class IotWebhookDeadLetterService {
 
   private async findPendingIds(maxCount: number) {
     const items = await (this.prisma as any).ioTWebhookDeadLetter.findMany({
-      where: { status: 'PENDING' },
+      where: this.tenantWhere({ status: 'PENDING' }),
       select: { id: true },
       take: maxCount,
       orderBy: { createdAt: 'asc' }
