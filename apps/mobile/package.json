@@ -21,6 +21,7 @@
     ,"test:ux1h-platform-mode": "node scripts/verify-ux1h-platform-mode.mjs"
     ,"test:ux1i-visual-system": "node scripts/verify-ux1i-visual-system.mjs"
     ,"test:ux-hotfix-1": "node scripts/verify-ux-hotfix-1.mjs"
+    ,"test:map-selection-fix": "node scripts/verify-map-selection-fix.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-vue": "^6.0.0",

@@ -36,7 +36,7 @@
       @stop="stopGps"
       @submit="submitGps"
     />
-    <FieldBottomSheet v-if="viewMode === 'map'" :field="mapStore.selectedField" />
+    <FieldBottomSheet v-if="viewMode === 'map'" :field="mapStore.selectedField" @close="clearSelection" />
     <DroneOperationCard v-if="viewMode === 'map' && selectedDroneOperation" :item="selectedDroneOperation" />
     <section v-if="fieldList.length && (!hasMapData || !demoReady)" class="panel">
       <div class="panel-title">部分图层数据尚未就绪</div>
@@ -99,6 +99,11 @@ onBeforeUnmount(() => {
 // the initial mount (e.g. a field deep link elsewhere corrected the farm context).
 watch(() => farmStore.currentFarmIdOrDefault, loadForCurrentFarm);
 
+// Switching 地图/列表 must never carry a stale selection back into view: 列表 already hides
+// FieldBottomSheet via v-if, but the underlying store selection would otherwise survive the
+// round trip and reappear the instant the user switches back to 地图.
+watch(viewMode, clearSelection);
+
 async function initMap() {
   if (!mapEl.value) return;
   adapter = createMapAdapter(mapStore.provider);
@@ -107,9 +112,13 @@ async function initMap() {
     if (mapStore.drawingMode) {
       mapStore.addDrawingPoint(point);
       renderDrawing();
+      return;
     }
+    // Clicking empty map space (not a boundary/marker, which stop propagation before this
+    // fires) must clear whatever is currently selected, not just leave the old card showing.
+    clearSelection();
   });
-  adapter.onPolygonClick((layer) => selectField(layer.data ?? layer));
+  adapter.onPolygonClick((layer) => selectField(layer.data ?? layer, layer.type));
 }
 
 function renderAll() {
@@ -248,7 +257,7 @@ function onGpsPoint(event: CustomEvent<LngLat & { timestamp?: string }>) {
   renderGpsTrack();
 }
 
-function selectField(field: any) {
+function selectField(field: any, layerType = 'FIELD') {
   const droneOperationId = field?.styleJson?.droneOperationId;
   if (droneOperationId) {
     selectedDroneOperation.value = (mapStore.mapData.droneOperations ?? []).find((item: any) => item.id === droneOperationId) ?? {
@@ -260,7 +269,12 @@ function selectField(field: any) {
     return;
   }
   selectedDroneOperation.value = null;
-  mapStore.selectField(field);
+  mapStore.selectField(field, layerType);
+}
+
+function clearSelection() {
+  mapStore.clearSelection();
+  selectedDroneOperation.value = null;
 }
 
 function layerStyle(type: string) {

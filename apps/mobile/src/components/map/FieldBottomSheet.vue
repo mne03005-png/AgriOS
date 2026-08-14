@@ -1,9 +1,12 @@
 <template>
   <section v-if="field" class="bottom-sheet">
-    <div>
-      <h2>{{ field.name ?? '地块详情' }}</h2>
-      <p class="subtle">面积 {{ field.areaMu ?? field.area ?? '-' }} 亩 · 来源 {{ field.source ?? '-' }} · {{ translateStatusLabel(field.status ?? 'NORMAL') }}</p>
-      <p class="subtle">作物 {{ field.cropType ?? '-' }} · 湿度 {{ field.moisture ?? '-' }} · AI {{ field.recommendation ?? '-' }}</p>
+    <div class="bottom-sheet-header">
+      <div>
+        <h2>{{ field.name ?? '地块详情' }}</h2>
+        <p class="subtle">面积 {{ field.areaMu ?? field.area ?? '-' }} 亩 · 来源 {{ field.source ?? '-' }} · {{ translateStatusLabel(field.status ?? 'NORMAL') }}</p>
+        <p class="subtle">作物 {{ field.cropType ?? '-' }} · 湿度 {{ field.moisture ?? '-' }} · AI {{ field.recommendation ?? '-' }}</p>
+      </div>
+      <button type="button" class="bottom-sheet-close" aria-label="关闭" @click="$emit('close')">✕</button>
     </div>
     <div class="button-row">
       <RouterLink class="primary-button" :to="`/fields/${field.fieldId ?? field.id ?? 'field_001'}`">进入详情</RouterLink>
@@ -19,6 +22,7 @@ import { canAccess } from '../../services/permissions';
 import { translateStatusLabel } from '../../services/status-translation';
 
 defineProps<{ field: any | null }>();
+defineEmits<{ close: [] }>();
 
 // UX-1E section 11: this link must match /boundaries/review's own route meta
 // (MANAGER/INSTALLER/ENGINEER/SUPER_ADMIN) -- FARMER previously saw it despite being unable

@@ -23,6 +23,9 @@ export const mapStore = reactive({
       },
   selectedField: null as any | null,
   selectedBoundary: null as any | null,
+  // Which activeLayers key the current selection was rendered under (e.g. 'FIELD' for a
+  // boundary). Lets toggleLayer() know whether a layer it just hid owns the current selection.
+  selectedLayerType: null as string | null,
   drawingMode: false,
   drawingPoints: [] as Array<{ lng: number; lat: number }>,
   gpsRecording: false,
@@ -33,12 +36,24 @@ export const mapStore = reactive({
     const result = await getMap(farmId);
     this.mapData = result.data;
     this.isMock = result.isMock;
-    this.selectedField = result.data.fieldBoundaries?.[0] ?? null;
+    // Never auto-select a boundary just because data loaded (initial mount, farm switch, or a
+    // post-save refresh) -- a detail card must only ever appear from an explicit click. If a
+    // boundary was already selected, re-validate it still exists in the freshly loaded data;
+    // a boundary that was deleted/archived elsewhere must not leave a stale card on screen.
+    if (this.selectedLayerType === 'FIELD' && this.selectedField) {
+      const stillExists = (result.data.fieldBoundaries ?? []).some((item: any) => item.id === this.selectedField.id);
+      if (!stillExists) this.clearSelection();
+    }
     return result;
   },
   toggleLayer(type: string) {
     this.activeLayers[type] = !this.activeLayers[type];
     localStorage.setItem('agrios.mobile.activeLayers', JSON.stringify(this.activeLayers));
+    // Turning off the layer that owns the current selection must clear it immediately -- a
+    // detail card pointing at a now-hidden shape is stale, not just visually inconsistent.
+    if (!this.activeLayers[type] && this.selectedLayerType === type) {
+      this.clearSelection();
+    }
   },
   startDrawing() {
     this.drawingMode = true;
@@ -60,9 +75,15 @@ export const mapStore = reactive({
   addGpsPoint(point: { lng: number; lat: number; timestamp?: string }) {
     if (this.gpsRecording) this.gpsTrackPoints.push(point);
   },
-  selectField(field: any) {
+  selectField(field: any, layerType = 'FIELD') {
     this.selectedField = field;
     this.selectedBoundary = field;
+    this.selectedLayerType = layerType;
+  },
+  clearSelection() {
+    this.selectedField = null;
+    this.selectedBoundary = null;
+    this.selectedLayerType = null;
   },
   async refreshLayers(farmId = defaultFarmId) {
     return this.loadMapData(farmId);

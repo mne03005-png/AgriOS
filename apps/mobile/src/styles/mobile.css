@@ -435,6 +435,29 @@ button:disabled {
   box-shadow: var(--shadow-md);
 }
 
+.bottom-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bottom-sheet-close {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.bottom-sheet-close:hover {
+  background: #e2e8f0;
+}
+
 .layer-toggle {
   display: flex;
   align-items: center;
