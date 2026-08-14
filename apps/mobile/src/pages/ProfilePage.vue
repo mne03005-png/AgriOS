@@ -31,12 +31,19 @@
       </section>
 
       <section class="panel">
-        <div class="panel-title">农场与账号</div>
+        <div class="panel-title">账号安全</div>
         <div class="profile-list">
           <RouterLink to="/change-password">修改密码</RouterLink>
         </div>
       </section>
 
+      <!-- PROD-USABILITY-1 section 18: 报表/AI 建议 stay here deliberately, not moved into their
+           own domain workflow yet -- mobile's primaryNavigation is capped at 5 items and
+           desktopSecondaryNavigation's 数据 entry is desktop-only (UX-1E section 13), so this is
+           currently the ONLY mobile discovery path to /reports and /ai. Removing them would
+           strand those pages on mobile, not simplify anything. See the PROD-USABILITY-1 final
+           report for the proposed follow-up (a real 数据 mobile entry point) that would let this
+           section shrink further without a regression. -->
       <section v-if="toolItems.length" class="panel">
         <div class="panel-title">农场数据与工具</div>
         <div class="profile-list">

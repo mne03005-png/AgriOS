@@ -3,6 +3,10 @@
     <div v-if="mapStore.isMock" class="mock-banner">当前为模拟地图数据</div>
     <MapToolbar v-model="viewMode" />
     <div v-show="viewMode === 'map'" ref="mapEl" class="map-sdk-host"></div>
+    <section v-if="viewMode === 'map' && !fieldList.length" class="panel map-empty-overlay">
+      <div class="panel-title">当前农场还没有地块边界</div>
+      <p class="warning-text">地图仍可正常查看和操作，可通过下方"手动画地块"或"GPS 走边界"添加第一个田块边界。</p>
+    </section>
     <section v-if="viewMode === 'list'" class="panel field-list-view">
       <div v-if="!fieldList.length" class="empty-state">
         <strong>暂无田块</strong>
@@ -16,6 +20,7 @@
       >
         <span class="attention-row-main">
           <strong>{{ item.name ?? '地块' }}</strong>
+          <StatusBadge v-if="item.status" :label="item.status" :tone="statusTone(item.status)" />
           <span class="subtle">{{ item.areaMu ?? item.area ?? '-' }} 亩</span>
         </span>
         <span class="subtle">{{ item.cropType ?? '-' }}</span>
@@ -33,9 +38,9 @@
     />
     <FieldBottomSheet v-if="viewMode === 'map'" :field="mapStore.selectedField" />
     <DroneOperationCard v-if="viewMode === 'map' && selectedDroneOperation" :item="selectedDroneOperation" />
-    <section v-if="!hasMapData || !demoReady" class="panel">
-      <div class="panel-title">暂无可用田块数据</div>
-      <p class="warning-text">请稍后刷新，或联系管理员确认农场边界、图层和设备是否已登记。</p>
+    <section v-if="fieldList.length && (!hasMapData || !demoReady)" class="panel">
+      <div class="panel-title">部分图层数据尚未就绪</div>
+      <p class="warning-text">请稍后刷新，或联系管理员确认图层和设备是否已登记。</p>
     </section>
   </section>
 </template>
@@ -45,6 +50,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getDemoHealth } from '../api/demo-api';
 import { createFieldBoundary, importGpsTrack } from '../api/gis-api';
 import DroneOperationCard from '../components/drone/DroneOperationCard.vue';
+import StatusBadge from '../components/common/StatusBadge.vue';
+import { statusTone } from '../services/status-translation';
 import DrawBoundaryTool from '../components/map/DrawBoundaryTool.vue';
 import FieldBottomSheet from '../components/map/FieldBottomSheet.vue';
 import GpsBoundaryRecorder from '../components/map/GpsBoundaryRecorder.vue';

@@ -9,7 +9,10 @@
       </div>
     </header>
     <aside class="desktop-nav" aria-label="桌面导航">
-      <RouterLink v-for="item in visibleNavigation" :key="item.path" :to="item.path">{{ item.icon }} {{ item.label }}</RouterLink>
+      <RouterLink v-for="item in visibleNavigation" :key="item.path" :to="item.path">
+        <NavIcon :name="item.icon" />
+        <span>{{ item.label }}</span>
+      </RouterLink>
     </aside>
     <main class="app-main">
       <RouterView />
@@ -21,6 +24,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppTabBar from './components/common/AppTabBar.vue';
+import NavIcon from './components/common/NavIcon.vue';
 import { primaryNavigation, desktopSecondaryNavigation, workspaceNavigation } from './config/navigation';
 import { authStore } from './stores/auth.store';
 import { farmStore } from './stores/farm.store';

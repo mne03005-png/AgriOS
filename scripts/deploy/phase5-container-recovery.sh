@@ -29,7 +29,7 @@ curl -fsS http://127.0.0.1:3201/login | grep -qi '<div id="app"'
 
 # Variables expand inside the containers.
 # shellcheck disable=SC2016
-"${compose[@]}" exec -T agrios-mysql sh -c 'mysql -N -B -uroot -p"$MYSQL_ROOT_PASSWORD" agrios -e "
+"${compose[@]}" exec -T agrios-mysql sh -c 'mysql --default-character-set=utf8mb4 -N -B -uroot -p"$MYSQL_ROOT_PASSWORD" agrios -e "
 SELECT CONCAT(\"phase5_users=\",COUNT(*)) FROM User WHERE id LIKE \"phase5-%\";
 SELECT CONCAT(\"phase5_tenants=\",COUNT(*)) FROM Tenant WHERE id LIKE \"phase5-%\";
 SELECT CONCAT(\"migrations=\",COUNT(*)) FROM _prisma_migrations;

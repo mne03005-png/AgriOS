@@ -44,7 +44,7 @@ printf '%s\n' '===== MQTT TLS/AUTH ====='
 printf '%s\n' '===== DATABASE ====='
 # Variable expands inside the container.
 # shellcheck disable=SC2016
-"${compose[@]}" exec -T agrios-mysql sh -c 'mysql -N -B -uroot -p"$MYSQL_ROOT_PASSWORD" agrios -e "
+"${compose[@]}" exec -T agrios-mysql sh -c 'mysql --default-character-set=utf8mb4 -N -B -uroot -p"$MYSQL_ROOT_PASSWORD" agrios -e "
 SELECT CONCAT(\"tables=\",COUNT(*),\" size_mb=\",ROUND(SUM(data_length+index_length)/1024/1024,2)) FROM information_schema.tables WHERE table_schema=DATABASE();
 SELECT CONCAT(\"User=\",COUNT(*)) FROM User;
 SELECT CONCAT(\"AuditEvent=\",COUNT(*)) FROM AuditEvent;

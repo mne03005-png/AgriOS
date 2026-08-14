@@ -114,15 +114,21 @@ test('E no-mock-as-real-provider: MapToolbar is a genuine map/list view switch, 
   assert.match(mapToolbar, /@click="\$emit\('update:modelValue', 'map'\)"/);
   assert.match(mapToolbar, /@click="\$emit\('update:modelValue', 'list'\)"/);
 });
-test('E2 no-mock-as-real-provider: the three placeholder SDK adapters remain unreachable (no key configured anywhere)', async () => {
-  for (const [name, content] of [['AMapAdapter', amapAdapter], ['BaiduMapAdapter', baiduAdapter], ['GoogleMapAdapter', googleAdapter]]) {
+test('E2 no-mock-as-real-provider: Baidu/Google stay honest unimplemented placeholders; AMap is a real implementation but only reachable with a real key', async () => {
+  for (const [name, content] of [['BaiduMapAdapter', baiduAdapter], ['GoogleMapAdapter', googleAdapter]]) {
     assert.match(content, /extends MockMapAdapter/, `${name} must stay an honest unimplemented placeholder, not silently gain fake functionality`);
   }
+  // PROD-USABILITY-1: AMapAdapter is now a real AMap JS API integration (see its own file
+  // header), not a MockMapAdapter alias -- but it must still be unreachable without a real key.
+  assert.doesNotMatch(amapAdapter, /extends MockMapAdapter/, 'AMapAdapter should be a real implementation now, not a placeholder alias');
+  assert.match(amapAdapter, /class AMapAdapter implements MapAdapter/);
+  assert.match(amapAdapter, /if \(!key\) throw new Error/, 'AMapAdapter.init must refuse to run without VITE_AMAP_KEY, never silently degrade');
   assert.match(mapAdapterIndex, /import\.meta\.env\.VITE_AMAP_KEY/);
   assert.match(mapAdapterIndex, /import\.meta\.env\.VITE_BAIDU_MAP_KEY/);
   assert.match(mapAdapterIndex, /import\.meta\.env\.VITE_GOOGLE_MAP_KEY/);
   // No .env/.env.example anywhere in the mobile app may define these keys -- if one did, the
-  // factory above would silently start routing to a fake/unimplemented adapter in production.
+  // factory above would silently start routing to a real or fake/unimplemented adapter in
+  // production. This is the exhaustive proof AMAP_CREDENTIALS_AVAILABLE=NO is still accurate.
   let envFiles = [];
   try {
     envFiles = (await readdir(new URL('../', import.meta.url))).filter((f) => f.startsWith('.env'));
@@ -132,6 +138,18 @@ test('E2 no-mock-as-real-provider: the three placeholder SDK adapters remain unr
   for (const file of envFiles) {
     const content = await readSrc(`../${file}`);
     assert.doesNotMatch(content, /VITE_AMAP_KEY=.+|VITE_BAIDU_MAP_KEY=.+|VITE_GOOGLE_MAP_KEY=.+/, `${file} must not fabricate a map provider key`);
+  }
+});
+test('E4 no-mock-as-real-provider: without a key, the AMap code ships zero bytes to production (build-time tree-shaken, not just logically unreachable)', async () => {
+  const { execSync } = await import('node:child_process');
+  execSync('npm run build', { cwd: new URL('..', import.meta.url), stdio: 'pipe' });
+  const distDir = new URL('../dist/assets/', import.meta.url);
+  const files = await readdir(distDir);
+  const jsFiles = files.filter((f) => f.endsWith('.js'));
+  assert.ok(jsFiles.length > 0, 'expected at least one built JS asset');
+  for (const file of jsFiles) {
+    const bundle = await readSrc(`../dist/assets/${file}`);
+    assert.doesNotMatch(bundle, /webapi\.amap\.com/, `${file} must not ship the real AMap loader URL without a configured key`);
   }
 });
 test('E3 MockMapAdapter honestly documents itself as the one real, non-placeholder implementation', () => {

@@ -7,7 +7,7 @@ compose=(docker compose --env-file .env.gray -f docker-compose.production.yml -f
 printf '%s\n' '===== DATA COUNTS ====='
 # Variable expands inside the container.
 # shellcheck disable=SC2016
-"${compose[@]}" exec -T agrios-mysql sh -c 'mysql -N -B -uroot -p"$MYSQL_ROOT_PASSWORD" agrios -e "
+"${compose[@]}" exec -T agrios-mysql sh -c 'mysql --default-character-set=utf8mb4 -N -B -uroot -p"$MYSQL_ROOT_PASSWORD" agrios -e "
 SELECT CONCAT(\"User.total=\",COUNT(*),\" phase5=\",SUM(id LIKE \"phase5-%\")) FROM User;
 SELECT CONCAT(\"Tenant.total=\",COUNT(*),\" phase5=\",SUM(id LIKE \"phase5-%\")) FROM Tenant;
 SELECT CONCAT(\"Farm.total=\",COUNT(*),\" phase5=\",SUM(id LIKE \"phase5-%\")) FROM Farm;

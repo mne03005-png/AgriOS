@@ -250,7 +250,7 @@ test('36 Engineer Workspace unchanged by UX-1G', () => {
   assert.doesNotMatch(engineer, /设备安装验收|调试步骤/, 'EngineerWorkbenchPage must not gain Installer commissioning content');
 });
 test('37 Farmer/Manager normal navigation unchanged', () => {
-  assert.match(navigation, /\{ path: '\/cockpit', label: '首页', icon: '⌂' \}/);
+  assert.match(navigation, /\{ path: '\/cockpit', label: '首页', icon: 'home' \}/);
   assert.doesNotMatch(cockpit, /设备安装验收|调试步骤/, 'CockpitPage must not gain Installer content');
   assert.doesNotMatch(managerPage, /设备安装验收|调试步骤/, 'ManagerWorkbenchPage must not gain Installer content');
 });

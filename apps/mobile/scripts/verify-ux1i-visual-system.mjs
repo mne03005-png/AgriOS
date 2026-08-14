@@ -89,12 +89,20 @@ test('7b new statusTone() helper maps existing status codes to tones without inv
 });
 
 // --- 8-11: navigation order unchanged ---
-test('8-9 FARMER/MANAGER mobile navigation order unchanged (首页/田块/作业/告警/我的)', () => {
-  assert.match(navigation, /export const primaryNavigation: NavigationItem\[\] = \[\s*\n\s*\{ path: '\/cockpit', label: '首页', icon: '⌂' \},\s*\n\s*\{ path: '\/map', label: '田块', icon: '◇' \},\s*\n\s*\{ path: '\/operations', label: '作业', icon: '✓' \},\s*\n\s*\{ path: '\/alerts', label: '告警', icon: '警' \},\s*\n\s*\{ path: '\/profile', label: '我的', icon: '人' \}\s*\n\s*\];/);
+test('8-9 FARMER/MANAGER mobile navigation order unchanged (首页/田块/作业/告警/我的; icons are PROD-USABILITY-1 NavIcon glyph names, not text/Chinese-character pseudo-icons)', () => {
+  assert.match(navigation, /export const primaryNavigation: NavigationItem\[\] = \[\s*\n\s*\{ path: '\/cockpit', label: '首页', icon: 'home' \},\s*\n\s*\{ path: '\/map', label: '田块', icon: 'field' \},\s*\n\s*\{ path: '\/operations', label: '作业', icon: 'task' \},\s*\n\s*\{ path: '\/alerts', label: '告警', icon: 'alert' \},\s*\n\s*\{ path: '\/profile', label: '我的', icon: 'user' \}\s*\n\s*\];/);
 });
 test('10-11 FARMER/MANAGER desktop navigation order unchanged (数据 inserted before 我的, never reordered)', () => {
-  assert.match(navigation, /export const desktopSecondaryNavigation: NavigationItem\[\] = \[\{ path: '\/reports', label: '数据', icon: '据' \}\];/);
+  assert.match(navigation, /export const desktopSecondaryNavigation: NavigationItem\[\] = \[\{ path: '\/reports', label: '数据', icon: 'chart' \}\];/);
   assert.match(appVue, /home\.slice\(0, profileIndex\), \.\.\.desktopSecondaryNavigation, \.\.\.home\.slice\(profileIndex\)/);
+});
+test('8b no navigation icon is a Chinese character or text glyph (NavIcon glyph names only)', () => {
+  const iconValues = [...navigation.matchAll(/icon: '([^']+)'/g)].map((m) => m[1]);
+  assert.ok(iconValues.length > 0, 'expected at least one icon value to check');
+  for (const value of iconValues) {
+    assert.doesNotMatch(value, /[一-鿿]/, `navigation icon "${value}" is a Chinese character, not an SVG glyph name`);
+    assert.match(value, /^[a-z]+$/, `navigation icon "${value}" must be a NavIcon glyph name (lowercase letters only)`);
+  }
 });
 
 // --- 12: SUPER_ADMIN platform/farm mode semantics unchanged ---

@@ -172,12 +172,12 @@ test('25 raw engineering identifiers remain available where useful (commandId/re
 });
 
 // --- 26-27: normal navigation unchanged ---
-test('26 Farmer normal navigation is unchanged (primaryNavigation untouched)', () => {
-  assert.match(navigation, /\{ path: '\/cockpit', label: '首页', icon: '⌂' \}/);
-  assert.match(navigation, /\{ path: '\/map', label: '田块', icon: '◇' \}/);
-  assert.match(navigation, /\{ path: '\/operations', label: '作业', icon: '✓' \}/);
-  assert.match(navigation, /\{ path: '\/alerts', label: '告警', icon: '警' \}/);
-  assert.match(navigation, /\{ path: '\/profile', label: '我的', icon: '人' \}/);
+test('26 Farmer normal navigation is unchanged (primaryNavigation paths/labels untouched; icon values are PROD-USABILITY-1 NavIcon glyph names, not text/Chinese-character pseudo-icons)', () => {
+  assert.match(navigation, /\{ path: '\/cockpit', label: '首页', icon: 'home' \}/);
+  assert.match(navigation, /\{ path: '\/map', label: '田块', icon: 'field' \}/);
+  assert.match(navigation, /\{ path: '\/operations', label: '作业', icon: 'task' \}/);
+  assert.match(navigation, /\{ path: '\/alerts', label: '告警', icon: 'alert' \}/);
+  assert.match(navigation, /\{ path: '\/profile', label: '我的', icon: 'user' \}/);
 });
 test('27 Manager normal navigation is unchanged (ManagerWorkbenchPage untouched by UX-1F)', () => {
   assert.match(managerPage, /快速入口/);

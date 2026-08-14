@@ -1,7 +1,7 @@
 <template>
   <nav class="tabbar">
     <RouterLink v-for="item in tabs" :key="item.path" :to="item.path" class="tabbar-item">
-      <span class="tabbar-icon">{{ item.icon }}</span>
+      <NavIcon class="tabbar-icon" :name="item.icon" />
       <span>{{ item.label }}</span>
     </RouterLink>
   </nav>
@@ -9,6 +9,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import NavIcon from './NavIcon.vue';
 import { primaryNavigation, workspaceNavigation } from '../../config/navigation';
 import { authStore } from '../../stores/auth.store';
 import { farmStore } from '../../stores/farm.store';
