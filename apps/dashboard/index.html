@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenAgriOS Dashboard</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">🌱</span>
+    <div>
+      <h1>OpenAgriOS</h1>
+      <p class="tagline">v0.1-alpha demo dashboard</p>
+    </div>
+  </div>
+  <div id="connection" class="connection">connecting…</div>
+</header>
+
+<main id="app">
+  <p id="loading">Loading farm snapshot…</p>
+</main>
+
+<template id="snapshot-template">
+  <section class="hierarchy">
+    <div class="crumb"><span class="crumb-label">Farm</span><span class="crumb-value" data-field="farmName">—</span></div>
+    <span class="crumb-arrow">→</span>
+    <div class="crumb"><span class="crumb-label">Field</span><span class="crumb-value" data-field="fieldName">—</span></div>
+    <span class="crumb-arrow">→</span>
+    <div class="crumb"><span class="crumb-label">Device</span><span class="crumb-value" data-field="deviceCode">—</span></div>
+  </section>
+
+  <section class="status-row">
+    <span class="status-badge" data-field="statusBadge">Unknown</span>
+    <span class="freshness" data-field="freshness"></span>
+  </section>
+
+  <section class="cards">
+    <article class="card">
+      <p class="card-label">Soil Moisture</p>
+      <p class="card-value"><span data-field="soilMoisture">—</span><span class="unit">%</span></p>
+    </article>
+    <article class="card">
+      <p class="card-label">Temperature</p>
+      <p class="card-value"><span data-field="temperature">—</span><span class="unit">°C</span></p>
+    </article>
+    <article class="card">
+      <p class="card-label">Humidity</p>
+      <p class="card-value"><span data-field="humidity">—</span><span class="unit">%</span></p>
+    </article>
+    <article class="card">
+      <p class="card-label">Battery</p>
+      <p class="card-value"><span data-field="battery">—</span><span class="unit">%</span></p>
+    </article>
+  </section>
+
+  <section class="alerts">
+    <h2>Alerts</h2>
+    <ul class="alert-list" data-field="alertList"></ul>
+    <p class="alert-empty" data-field="alertEmpty">No open alerts.</p>
+  </section>
+</template>
+
+<footer>
+  <p>Sensor Simulator → MQTT Broker → Backend → Database → Dashboard. Polling <code data-field="endpoint">/api/v1/open/farms/…/snapshot</code> every 5s.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

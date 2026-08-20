@@ -46,6 +46,7 @@ import { IotModule } from './modules/iot/iot.module';
 import { IotIntegrationModule } from './modules/iot/integration/iot-integration.module';
 import { MqttModule } from './modules/mqtt/mqtt.module';
 import { MobileModule } from './modules/mobile/mobile.module';
+import { OpenAgriosModule } from './modules/open-agrios/open-agrios.module';
 import { OperationLogModule } from './modules/operation-log/operation-log.module';
 import { OperationCostModule } from './modules/operation-cost/operation-cost.module';
 import { OperationReportModule } from './modules/operation-report/operation-report.module';
@@ -119,6 +120,7 @@ import { YieldAnalysisModule } from './modules/yield-analysis/yield-analysis.mod
     CostModule,
     MqttModule,
     MobileModule,
+    OpenAgriosModule,
     OperationReportModule,
     ReportModule
   ],
