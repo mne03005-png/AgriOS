@@ -1,0 +1,13 @@
+{
+  "name": "openagrios-sensor-simulator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hardware-free MQTT sensor simulator for OpenAgriOS v0.1-alpha — publishes soil moisture, temperature, humidity, battery and online status.",
+  "main": "simulator.js",
+  "scripts": {
+    "start": "node simulator.js"
+  },
+  "dependencies": {
+    "mqtt": "^5.13.0"
+  }
+}
