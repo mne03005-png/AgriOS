@@ -70,6 +70,10 @@ Documented honestly, not silently — these are release-scope decisions, not unn
 - **Threshold alerts are fixed, not configurable.** 20%/15%/30s are hardcoded constants
   (`open-agrios.constants.ts`), intentionally not per-crop/per-field — this is a demo-grade alert,
   not the production decision engine.
+- **No CI workflow.** There is no `.github/workflows/` in this release — the README's Build badge
+  reflects this honestly rather than pointing at a workflow that doesn't exist. Adding CI (at
+  minimum: backend typecheck, the `verify-*` script suite, and an `expo`/dashboard smoke check) is
+  a reasonable Phase 2 follow-up, not a blocker for this alpha.
 
 ## Deployment verification
 

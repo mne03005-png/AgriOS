@@ -4,7 +4,7 @@
 [![License: Apache--2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Docker Compose](https://img.shields.io/badge/deploy-docker%20compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 [![Status](https://img.shields.io/badge/status-alpha-orange)](docs/RELEASE-AUDIT-v0.1-alpha.md)
-[![Build](https://img.shields.io/badge/build-not%20yet%20configured-lightgrey)](.github)
+[![Build](https://img.shields.io/badge/build-not%20yet%20configured-lightgrey)](docs/RELEASE-AUDIT-v0.1-alpha.md)
 
 <!--
   Badge placeholders: the Release/License/Docker/Status badges above are static (shields.io
@@ -63,10 +63,15 @@ why this reuses the existing AgriOS backend instead of a rewrite:
 ## Quick start
 
 ```bash
-git clone <this repository>
-cd OpenAgriOS
+git clone <this repository's URL>
+cd <the cloned directory>
 docker compose up
 ```
+
+(The clone folder is named after whatever this repository is published as — this codebase's local
+directory is still named `AgriOS` pending the public rename to `OpenAgriOS`; `docker compose up`
+works from either name, since `docker-compose.yml` doesn't depend on the containing folder's
+name.)
 
 Then open **http://localhost:8080**.
 
