@@ -7,6 +7,13 @@
 #
 # This is intentionally separate from docker-compose.p12.yml / docker-compose.production.yml /
 # docker-compose.gray.yml, which deploy the full production system. Nothing here changes those.
+#
+# Explicit project name: this directory is still locally named "AgriOS", which Compose would
+# otherwise use as the default project name -- colliding with an unrelated, much larger local
+# dev stack (ThingsBoard, Grafana, InfluxDB, etc.) that already runs under that same default name
+# on a contributor's machine. Naming this stack "openagrios" keeps `docker compose down` and
+# `--remove-orphans` scoped to only the five services below, never anything else.
+name: openagrios
 services:
   mysql:
     image: mysql:8.4
