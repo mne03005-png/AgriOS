@@ -27,10 +27,10 @@ jobs:
       DEVICE_CONTROL_MODE: MOCK
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -40,6 +40,9 @@ jobs:
 
       - name: Generate Prisma client
         run: npm run prisma:generate --workspace apps/backend
+
+      - name: Build backend workspace dependencies
+        run: npm run build --workspace packages/edge-core
 
       - name: Type check backend
         run: npx tsc --project apps/backend/tsconfig.json --noEmit --incremental false
@@ -57,7 +60,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Validate local demo stack
         run: docker compose --file docker-compose.yml config --quiet
