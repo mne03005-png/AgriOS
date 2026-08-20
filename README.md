@@ -1,5 +1,20 @@
 # OpenAgriOS
 
+[![Release](https://img.shields.io/badge/release-v0.1--alpha-2f8f4e)](CHANGELOG.md)
+[![License: Apache--2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Docker Compose](https://img.shields.io/badge/deploy-docker%20compose-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
+[![Status](https://img.shields.io/badge/status-alpha-orange)](docs/RELEASE-AUDIT-v0.1-alpha.md)
+[![Build](https://img.shields.io/badge/build-not%20yet%20configured-lightgrey)](.github)
+
+<!--
+  Badge placeholders: the Release/License/Docker/Status badges above are static (shields.io
+  "static badge" syntax) and render correctly with no GitHub repo behind them yet. The Build
+  badge is intentionally "not yet configured" -- there is no CI workflow in this release (see
+  docs/RELEASE-AUDIT-v0.1-alpha.md, Known Limitations). Once this repo is pushed and CI exists,
+  replace it with a live workflow badge, e.g.:
+  [![CI](https://github.com/<org>/<repo>/actions/workflows/ci.yml/badge.svg)](https://github.com/<org>/<repo>/actions/workflows/ci.yml)
+-->
+
 **v0.1-alpha** — an open-source Farm Digital Twin Platform built on IoT and MQTT.
 
 Physical farm objects become digital entities you can see, query, and eventually act on:
@@ -87,6 +102,25 @@ The values move because `device/simulator` is a real MQTT publisher, not a stati
 whole point is that nothing on screen is hardcoded. Stop the simulator and the device flips to
 Offline within ~30 seconds; drop the simulated battery below 15% or soil moisture below 20% and an
 alert appears.
+
+## Screenshots
+
+> Placeholder — this release was verified against the running Docker stack (API responses,
+> ingestion logs, service health; see [`docs/RELEASE-AUDIT-v0.1-alpha.md`](docs/RELEASE-AUDIT-v0.1-alpha.md)
+> "Deployment verification") but a rendered browser screenshot was not captured in this
+> environment. Before or shortly after the public release, add:
+>
+> - `docs/screenshots/dashboard.png` — the main dashboard at `http://localhost:8080` after
+>   `docker compose up`, showing the farm → field → device breadcrumb and live telemetry cards
+> - `docs/screenshots/dashboard-alert.png` — the dashboard with an open alert visible (trigger one
+>   by editing `device/simulator/simulator.js`'s baseline battery/soil-moisture values down past
+>   the thresholds in `docs/mqtt-spec.md`)
+>
+> then replace this block with:
+>
+> ```markdown
+> ![OpenAgriOS dashboard](docs/screenshots/dashboard.png)
+> ```
 
 ## What this release is, and isn't
 
