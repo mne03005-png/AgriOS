@@ -1,0 +1,104 @@
+# OpenAgriOS v0.1-alpha — local demo stack.
+#
+# docker compose up
+#
+# Brings up: MySQL, an MQTT broker, the backend (with the OpenAgriOS demo seeded automatically),
+# a hardware-free sensor simulator, and the dashboard. See README.md for the full quick start.
+#
+# This is intentionally separate from docker-compose.p12.yml / docker-compose.production.yml /
+# docker-compose.gray.yml, which deploy the full production system. Nothing here changes those.
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: openagrios-mysql
+    environment:
+      MYSQL_DATABASE: openagrios
+      MYSQL_USER: openagrios
+      MYSQL_PASSWORD: openagrios_dev_password
+      MYSQL_ROOT_PASSWORD: openagrios_dev_root_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - openagrios-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uopenagrios", "-popenagrios_dev_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: openagrios-mqtt
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./docker/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: openagrios-backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: mysql://openagrios:openagrios_dev_password@mysql:3306/openagrios
+      JWT_SECRET: openagrios-alpha-demo-jwt-secret-not-for-production-use
+      JWT_REFRESH_SECRET: openagrios-alpha-demo-refresh-secret-not-for-production
+      JWT_EXPIRES_IN: 7d
+      DEVICE_ACK_HMAC_SECRET: openagrios-alpha-demo-device-ack-hmac-secret-32-chars-min
+      ENABLE_AUTO_EXECUTION: "false"
+      DEVICE_CONTROL_MODE: MOCK
+      ACTION_QUEUE_DRIVER: memory
+      CORS_ORIGINS: "http://localhost:8080"
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+      OPEN_AGRIOS_MQTT_ENABLED: "true"
+      # Deliberately not `prisma migrate deploy`: a fresh database cannot currently complete the
+      # full existing migration history (see docs/AUDIT.md). `db push` builds the schema directly
+      # from prisma/schema.prisma, which is what a from-scratch alpha demo actually needs, without
+      # touching or "fixing" the production migration files. Verified against a real, empty MySQL
+      # 8.4 container.
+      #
+      # The seed step deliberately does not use the `ts-node` CLI directly (`npx ts-node
+      # prisma/seed-openagrios-demo.ts`): Node 22's own entry-file module-format detection claims
+      # the .ts file as an ESM entry point before ts-node's CommonJS register hook can intercept
+      # it (ERR_UNKNOWN_FILE_EXTENSION), a known ts-node v10 / Node 22 interaction. Loading it via
+      # `node -r ts-node/register -e "require(...)"` instead keeps the entry point a CJS eval
+      # string, which sidesteps the detection. Verified directly against this image.
+    command: >
+      sh -c "npx prisma db push --schema prisma/schema.prisma --skip-generate --accept-data-loss &&
+             node -r ts-node/register -e \"require('./prisma/seed-openagrios-demo.ts').seedOpenAgriosDemo().then(()=>process.exit(0)).catch((e)=>{console.error(e);process.exit(1)})\" &&
+             node dist/src/main.js"
+    ports:
+      - "3000:3000"
+
+  simulator:
+    build:
+      context: device/simulator
+      dockerfile: Dockerfile
+    container_name: openagrios-simulator
+    depends_on:
+      - mqtt
+      - backend
+    environment:
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+      FARM_ID: openagrios-demo-farm
+      FIELD_ID: openagrios-demo-field-01
+      DEVICE_ID: sensor-001
+      INTERVAL_MS: "5000"
+
+  dashboard:
+    build:
+      context: apps/dashboard
+      dockerfile: Dockerfile
+    container_name: openagrios-dashboard
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  openagrios-mysql-data:
