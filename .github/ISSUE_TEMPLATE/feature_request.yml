@@ -1,0 +1,55 @@
+name: Feature request
+description: Propose a focused improvement to OpenAgriOS
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Describe the agricultural or engineering need, not only the proposed implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Explain the smallest useful change and how a user would interact with it.
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Backend API
+        - Dashboard or mobile frontend
+        - MQTT or telemetry ingestion
+        - Device simulator or edge agent
+        - Docker or deployment
+        - Documentation or community
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe current workarounds or smaller alternatives.
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety, data, and compatibility impact
+      description: Note any effect on device control, MQTT contracts, database migrations, tenant data, or backward compatibility. Write "None" when not applicable.
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: I checked the roadmap and existing issues.
+          required: true
+        - label: I am proposing a focused change rather than a full-system rewrite.
+          required: true

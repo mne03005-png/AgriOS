@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/mne03005-png/AgriOS/security/policy
+    about: Read the private email reporting instructions. Do not open a public issue.
