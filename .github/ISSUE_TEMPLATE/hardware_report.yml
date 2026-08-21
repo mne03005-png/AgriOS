@@ -1,0 +1,84 @@
+name: Hardware report
+description: Report a problem with a sensor node, gateway, or other physical device
+title: "[Hardware]: "
+labels:
+  - hardware
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping validate OpenAgriOS in the field. Do not include credentials, private farm location data, or security vulnerabilities. Report vulnerabilities privately using SECURITY.md.
+
+        This template is for problems with physical hardware (sensor nodes, gateways, power, enclosures, LoRa/MQTT connectivity in the field). For a software-only problem, use the Bug report template instead.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Hardware component
+      options:
+        - Sensor node (MCU / firmware)
+        - LoRa radio or range
+        - Gateway
+        - Power (solar, battery)
+        - Enclosure or waterproofing
+        - Wiring or connectors
+        - Sensor accuracy or drift
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem
+      description: What happened, and what did you expect instead?
+      placeholder: A concise description of the observed and expected hardware behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Conditions
+      description: When does this happen? Continuously, intermittently, after how long, under what weather/power conditions?
+      placeholder: |
+        1. Deployed ...
+        2. After ... hours/days ...
+        3. Observed ...
+    validations:
+      required: true
+  - type: input
+    id: firmware-version
+    attributes:
+      label: Firmware / simulator version or commit
+      placeholder: device/simulator commit SHA, or real firmware version once available
+    validations:
+      required: true
+  - type: textarea
+    id: hardware-details
+    attributes:
+      label: Hardware details
+      description: MCU/board, LoRa module, sensor model(s), solar panel and battery spec, gateway hardware — whatever is relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Deployment environment
+      description: Outdoor/indoor, approximate climate, distance to gateway, obstructions, power source. Do not include precise farm location or address.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, telemetry, or photos
+      description: Paste relevant sanitized MQTT payloads, backend logs, or attach photos of the physical issue (e.g. enclosure damage, wiring). Do not include tokens, passwords, or private data.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-submission checks
+      options:
+        - label: I searched existing issues for duplicates.
+          required: true
+        - label: I removed secrets, precise farm location, and private device data.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true
