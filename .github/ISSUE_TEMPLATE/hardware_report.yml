@@ -1,8 +1,6 @@
 name: Hardware report
 description: Report a problem with a sensor node, gateway, or other physical device
 title: "[Hardware]: "
-labels:
-  - hardware
 body:
   - type: markdown
     attributes:
